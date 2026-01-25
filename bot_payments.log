@@ -1,0 +1,352 @@
+2026-01-25 00:29:02,614 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-01-25 00:30:07,528 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-01-25 00:38:56,076 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-01-25 00:43:36,961 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-01-25 00:50:37,176 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-01-25 00:50:45,384 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-01-25 00:51:36,471 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-01-25 00:52:16,650 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-01-25 00:59:14,740 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-01-25 01:01:49,460 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-01-25 01:02:35,702 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-01-25 01:11:33,165 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-01-25 01:15:24,769 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-01-25 01:16:25,315 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-01-25 01:24:12,412 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-01-25 01:24:48,795 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-01-25 01:27:26,688 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-01-25 13:19:44,978 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-01-25 13:21:38,579 - __main__ - ERROR - Exception while handling an update: No module named 'bot'
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\marafon_bot\bot_marafon.py", line 348, in handle_buttons
+    await unique_buttons[text](update, context)
+  File "C:\Users\САШАДАША\Desktop\marafon_bot\bot_marafon.py", line 878, in my_assignments_menu
+    missed_days = check_and_open_missed_days(user_id)
+  File "C:\Users\САШАДАША\Desktop\marafon_bot\database.py", line 1507, in check_and_open_missed_days
+    user_time = get_user_local_time(user_id)
+  File "C:\Users\САШАДАША\Desktop\marafon_bot\database.py", line 49, in get_user_local_time
+    from bot import get_moscow_time  # Импортируем из bot.py
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ModuleNotFoundError: No module named 'bot'
+2026-01-25 13:22:28,676 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-01-25 13:23:39,379 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-01-25 16:37:09,444 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-01-25 16:37:10,662 - __main__ - ERROR - Exception while handling an update: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 134, in network_retry_loop
+    await do_action()
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 127, in do_action
+    action_cb_task.result()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_updater.py", line 340, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 676, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 4780, in get_updates
+    await self._post(
+    ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    ),
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 703, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 372, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 732, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_baserequest.py", line 375, in _request_wrapper
+    raise exception
+telegram.error.Conflict: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+2026-01-25 16:37:14,756 - __main__ - ERROR - Exception while handling an update: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 134, in network_retry_loop
+    await do_action()
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 127, in do_action
+    action_cb_task.result()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_updater.py", line 340, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 676, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 4780, in get_updates
+    await self._post(
+    ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    ),
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 703, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 372, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 732, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_baserequest.py", line 375, in _request_wrapper
+    raise exception
+telegram.error.Conflict: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+2026-01-25 16:37:15,842 - __main__ - ERROR - Exception while handling an update: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 134, in network_retry_loop
+    await do_action()
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 127, in do_action
+    action_cb_task.result()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_updater.py", line 340, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 676, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 4780, in get_updates
+    await self._post(
+    ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    ),
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 703, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 372, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 732, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_baserequest.py", line 375, in _request_wrapper
+    raise exception
+telegram.error.Conflict: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+2026-01-25 16:37:20,430 - __main__ - ERROR - Exception while handling an update: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 134, in network_retry_loop
+    await do_action()
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 127, in do_action
+    action_cb_task.result()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_updater.py", line 340, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 676, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 4780, in get_updates
+    await self._post(
+    ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    ),
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 703, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 372, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 732, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_baserequest.py", line 375, in _request_wrapper
+    raise exception
+telegram.error.Conflict: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+2026-01-25 16:37:22,027 - __main__ - ERROR - Exception while handling an update: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 134, in network_retry_loop
+    await do_action()
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 127, in do_action
+    action_cb_task.result()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_updater.py", line 340, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 676, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 4780, in get_updates
+    await self._post(
+    ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    ),
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 703, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 372, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 732, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_baserequest.py", line 375, in _request_wrapper
+    raise exception
+telegram.error.Conflict: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+2026-01-25 16:37:27,369 - __main__ - ERROR - Exception while handling an update: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 134, in network_retry_loop
+    await do_action()
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 127, in do_action
+    action_cb_task.result()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_updater.py", line 340, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 676, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 4780, in get_updates
+    await self._post(
+    ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    ),
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 703, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_extbot.py", line 372, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\_bot.py", line 732, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\request\_baserequest.py", line 375, in _request_wrapper
+    raise exception
+telegram.error.Conflict: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+2026-01-25 16:37:49,987 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-01-25 16:39:00,522 - bot - INFO - === Бот запущен с логированием платежей ===
