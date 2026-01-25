@@ -919,93 +919,67 @@ async def my_assignments_menu(update: Update, context: ContextTypes.DEFAULT_TYPE
     )
 
 async def show_available_assignments(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """📝 Показывает ВСЕ доступные задания текущей части одним списком"""
+    """📝 Показывает задания из ВСЕХ активных частей"""
     context.user_data['current_section'] = 'available_assignments'
     user_id = update.message.from_user.id
     
-    from database import get_current_arc
-    current_arc = get_current_arc()
+    # ИМПОРТ НОВЫХ ФУНКЦИЙ
+    from database import get_user_active_arcs, get_current_arc_day
     
-    if not current_arc:
+    # ПОЛУЧАЕМ ВСЕ АКТИВНЫЕ ЧАСТИ (не одну!)
+    active_arcs = get_user_active_arcs(user_id)
+    
+    if not active_arcs:
         await update.message.reply_text(
-            "📅 **Сейчас между частями перерыв.**\n\n"
-            "Следующая часть скоро начнется!\n"
-            "Посмотрите доступные части в разделе 'Каталог курсов'.",
+            "📅 **У вас нет активных потоков.**\n\n"
+            "Вы присоединитесь к потоку с даты его начала.\n"
+            "Посмотрите доступные потоки в разделе 'Каталог курсов'.",
             parse_mode='Markdown'
         )
         return
     
-    arc_id, arc_title = current_arc
-    context.user_data['current_arc_id'] = arc_id
+    # 📊 СОБИРАЕМ ВСЕ ЗАДАНИЯ ИЗ ВСЕХ АКТИВНЫХ ЧАСТЕЙ
     
-    # 🔥 ОТКРЫВАЕМ СОЕДИНЕНИЕ ЗДЕСЬ И ДЕРЖИМ ОТКРЫТЫМ
     conn = sqlite3.connect('mentor_bot.db')
     cursor = conn.cursor()
     
-    # Проверяем доступ
-    cursor.execute('SELECT access_type FROM user_arc_access WHERE user_id = ? AND arc_id = ?', 
-                  (user_id, arc_id))
-    access_result = cursor.fetchone()
+    all_assignments_info = []
+    total_available = 0
+    total_in_progress = 0
+    total_completed = 0
     
-    has_access = access_result is not None or user_id in ADMIN_IDS
-    
-    if not has_access:
-        conn.close()
-        keyboard = [
-            ["🎯 Купить тренинг"],
-            ["🔙 В главное меню"]
-        ]
-        reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-    
-        await update.message.reply_text(
-            f"🔒 **У вас нет доступа к текущей части.**\n\n"
-            f"{arc_title}\n\n"
-            f"Чтобы получить доступ, нажмите **'🎯 Купить тренинг'** → **'💰 Купить доступ'**",
-            reply_markup=reply_markup,
-            parse_mode='Markdown'
-        )
-        return
-    
-    access_type = access_result[0] if access_result else None
-    
-    # Получаем текущий день части для пользователя
-    from database import get_current_arc_day
-    current_day_info = get_current_arc_day(user_id, arc_id)
-    
-    if not current_day_info or current_day_info['day_number'] == 0:
-        conn.close()
-        await update.message.reply_text(
-            "⏳ **Часть еще не началась.**\n\n"
-            "Задания появятся с началом части.",
-            parse_mode='Markdown'
-        )
-        return
-    
-    current_day_num = current_day_info['day_number']
-    
-    # 🔥 ОСНОВНАЯ ЛОГИКА: получаем ВСЕ задания части
-    # База УЖЕ открыта - используем существующий cursor
-    
-    # Получаем дни и задания
-    cursor.execute('''
-        SELECT d.day_id, d.title, d.order_num as day_num,
-               a.assignment_id, a.title as assignment_title
-        FROM days d
-        LEFT JOIN assignments a ON d.day_id = a.day_id
-        WHERE d.arc_id = ? 
-        ORDER BY d.order_num, a.assignment_id
-    ''', (arc_id,))
-    
-    all_days_assignments = cursor.fetchall()
-    
-    # Фильтруем: только дни <= текущему дню
-    available_assignments = []
-    completed_assignments = []
-    in_progress_assignments = []
-    
-    for day_id, day_title, day_num, assignment_id, assignment_title in all_days_assignments:
-        if day_num <= current_day_num and assignment_id:
-            # Проверяем статус задания
+    # ДЛЯ КАЖДОЙ АКТИВНОЙ ЧАСТИ
+    for arc_id, arc_title, arc_start, arc_end, access_type in active_arcs:
+        # Проверяем доступ (если не админ)
+        if user_id not in ADMIN_IDS:
+            cursor.execute('SELECT access_type FROM user_arc_access WHERE user_id = ? AND arc_id = ?', 
+                          (user_id, arc_id))
+            access_result = cursor.fetchone()
+            
+            if not access_result:
+                continue  # Нет доступа к этой части
+        
+        # Получаем текущий день для этой части
+        current_day_info = get_current_arc_day(user_id, arc_id)
+        
+        if not current_day_info or current_day_info['day_number'] == 0:
+            continue  # Часть еще не началась
+        
+        current_day_num = current_day_info['day_number']
+        
+        # Получаем задания на текущий день этой части
+        cursor.execute('''
+            SELECT a.assignment_id, a.title, a.content_text
+            FROM assignments a
+            JOIN days d ON a.day_id = d.day_id
+            WHERE d.arc_id = ? AND d.order_num = ?
+            ORDER BY a.assignment_id
+        ''', (arc_id, current_day_num))
+        
+        day_assignments = cursor.fetchall()
+        
+        # Для каждого задания проверяем статус
+        for assignment_id, assignment_title, content_text in day_assignments:
             cursor.execute('''
                 SELECT status FROM user_progress_advanced 
                 WHERE user_id = ? AND assignment_id = ?
@@ -1014,125 +988,110 @@ async def show_available_assignments(update: Update, context: ContextTypes.DEFAU
             status_result = cursor.fetchone()
             status = status_result[0] if status_result else 'new'
             
+            # Сохраняем информацию
             assignment_info = {
-                'day_num': day_num,
-                'day_title': day_title,
+                'arc_id': arc_id,
+                'arc_title': arc_title[:20],  # Обрезаем длинное название
                 'assignment_id': assignment_id,
-                'title': assignment_title or f"Задание {day_num}",
-                'status': status  # 'new', 'submitted', 'approved'
+                'title': assignment_title,
+                'status': status,
+                'day_num': current_day_num,
+                'access_type': access_type
             }
             
+            # Считаем статистику
             if status == 'new':
-                available_assignments.append(assignment_info)
+                all_assignments_info.append(assignment_info)
+                total_available += 1
             elif status == 'submitted':
-                in_progress_assignments.append(assignment_info)
+                total_in_progress += 1
             elif status == 'approved':
-                completed_assignments.append(assignment_info)
+                total_completed += 1
     
-    # 🔥 ФИЛЬТРУЕМ для пробного доступа
-    if access_type == 'trial':
-        # Для пробного доступа показываем только первые 3 дня
-        available_assignments = [a for a in available_assignments if a['day_num'] <= 3]
-        in_progress_assignments = [a for a in in_progress_assignments if a['day_num'] <= 3]
-        completed_assignments = [a for a in completed_assignments if a['day_num'] <= 3]
-    
-    # Закрываем соединение перед отправкой сообщения
     conn.close()
     
-    # Формируем сообщение
-    message = f"📝 **ДОСТУПНЫЕ ЗАДАНИЯ**\n\n"
-    message += f"🔄 **Часть:** {arc_title}\n"
-    message += f"📅 **Текущий день:** {current_day_num} из 40\n\n"
+    # 📝 ФОРМИРУЕМ СООБЩЕНИЕ
     
-    # Сообщение о пробном доступе
-    if access_type == 'trial':
-        message += "⚠️ **У вас пробный доступ (3 дня)**\n"
-        message += "Доступны только первые 3 задания. Купите полный доступ в 'Каталог курсов'.\n\n"
+    if not all_assignments_info:
+        await update.message.reply_text(
+            "✅ **Все задания выполнены!**\n\n"
+            "Новые задания появятся завтра в 06:00 по вашему времени.",
+            parse_mode='Markdown'
+        )
+        return
     
-    # Показываем статистику
+    message = "📝 **ДОСТУПНЫЕ ЗАДАНИЯ**\n\n"
+    
+    # Информация о потоках
+    arcs_summary = []
+    for arc_id, arc_title, arc_start, arc_end, access_type in active_arcs:
+        day_info = get_current_arc_day(user_id, arc_id)
+        if day_info and day_info['day_number'] > 0:
+            arcs_summary.append(f"• {arc_title} (день {day_info['day_number']})")
+    
+    if arcs_summary:
+        message += "**Активные потоки:**\n" + "\n".join(arcs_summary) + "\n\n"
+    
+    # Статистика
     message += f"📊 **Ваш прогресс:**\n"
-    message += f"• 🔵 Новых: {len(available_assignments)}\n"
-    message += f"• 🟡 На проверке: {len(in_progress_assignments)}\n"
-    message += f"• ✅ Проверено: {len(completed_assignments)}\n\n"
-    
-    # Показываем доступные задания
-    if available_assignments:
-        message += "🔵 **ДОСТУПНЫЕ СЕЙЧАС:**\n"
-    
-        # Группируем по статусам
-        today_assignments = [a for a in available_assignments if a['day_num'] == current_day_num]
-        past_assignments = [a for a in available_assignments if a['day_num'] < current_day_num]
-    
-        if today_assignments:
-            message += "**Открыто сегодня:**\n"
-            for assignment in today_assignments[:5]:
-                message += f"• {assignment['title']}\n"
-    
-        if past_assignments:
-            message += "\n**Прошедшие задания:**\n"
-            for assignment in past_assignments[:5]:
-                message += f"• {assignment['title']}\n"
-    
-        if len(available_assignments) > 6:
-            message += f"\n• ... и еще {len(available_assignments) - 6} заданий\n"
-    
-        message += "\n"
-    
-    # Показываем задания на проверке
-    if in_progress_assignments:
-        message += "🟡 **НА ПРОВЕРКЕ:**\n"
-        for assignment in in_progress_assignments[:5]:
-            message += f"• {assignment['title']}\n"
-        message += "\n"
+    message += f"• 🔵 Новых: {total_available}\n"
+    message += f"• 🟡 На проверке: {total_in_progress}\n"
+    message += f"• ✅ Проверено: {total_completed}\n\n"
     
     # Инструкция
     message += "💡 **Как работать:**\n"
     message += "1. Нажмите на задание из списка ниже\n"
     message += "2. Выполните и отправьте на проверку\n"
-    message += "3. Комментарий к отправленному заданию появится в разделе 'Ответ психолога'\n"
-    message += "4. Задания открываются последовательно. выполни доступное и сразу же откроется слудующее\n"
-    message += "5. Задания прошедних дней доступны для выполнения. Ограничение только в текущем дне части тренинга - дальше него не доступно пока не наступит следующий день\n"
-    message += "6. Новые задания открываются в 06:00 по вашему времени"
+    message += "3. Комментарий появится в разделе 'Ответ психолога'\n"
+    message += "4. Новые задания открываются в 06:00 по вашему времени\n\n"
     
-    # Создаем клавиатуру с заданиями
+    message += "**Обозначения в названиях:**\n"
+    message += "• (П1) - Поток 1\n"
+    message += "• (П2) - Поток 2\n"
+    message += "• и т.д.\n\n"
+    
+    message += "Выберите задание:"
+    
+    # 🎹 СОЗДАЕМ КЛАВИАТУРУ
+    
     keyboard = []
+    assignments_mapping = []  # Для сохранения связи кнопка → задание
     
-    # Группируем по 2 кнопки в ряд
+    # Группируем задания по 2 в ряд
     row = []
-    for assignment in available_assignments[:24]:  # Ограничим 12 кнопками
-        # Определяем статус
-        if assignment['day_num'] == current_day_num:
-            status = "открыто сегодня"
-        else:
-            status = "прошедшее"
-    
-        # Формируем текст кнопки
-        btn_text = f"📝 {assignment['title']}"
-    
+    for i, assignment in enumerate(all_assignments_info[:24]):  # Ограничиваем 24 заданиями
+        # Формируем текст кнопки с указанием потока
+        short_arc = f"П{assignment['arc_id']}"  # П1, П2 и т.д.
+        btn_text = f"📝 {assignment['title']} ({short_arc})"
+        
         row.append(btn_text)
-    
-        if len(row) == 2:
+        
+        # Сохраняем mapping
+        assignments_mapping.append({
+            'btn_text': btn_text,
+            'arc_id': assignment['arc_id'],
+            'assignment_id': assignment['assignment_id'],
+            'title': assignment['title']
+        })
+        
+        if len(row) == 2 or i == len(all_assignments_info[:24]) - 1:
             keyboard.append(row)
             row = []
     
-    # Добавляем последний неполный ряд
-    if row:
-        keyboard.append(row)
-    
     # Добавляем служебные кнопки
-    if in_progress_assignments:
+    if total_in_progress > 0:
         keyboard.append(["🟡 Задания на проверке"])
     
     keyboard.append(["📚 В раздел Мои задания"])
     
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     
-    # Сохраняем информацию о доступных заданиях для быстрого доступа
-    context.user_data['available_assignments'] = {
-        'assignments': available_assignments,
-        'in_progress': in_progress_assignments,
-        'completed': completed_assignments,
-        'access_type': access_type
+    # 💾 СОХРАНЯЕМ ДАННЫЕ ДЛЯ ОБРАБОТКИ НАЖАТИЙ
+    context.user_data['assignments_mapping'] = assignments_mapping
+    context.user_data['available_assignments_stats'] = {
+        'total_available': total_available,
+        'total_in_progress': total_in_progress,
+        'total_completed': total_completed
     }
     
     await update.message.reply_text(
@@ -1140,6 +1099,8 @@ async def show_available_assignments(update: Update, context: ContextTypes.DEFAU
         reply_markup=reply_markup,
         parse_mode='Markdown'
     )
+
+
 
 async def show_assignment(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показывает детали задания и ВЫБОР ТИПА ОТВЕТА"""
@@ -4225,103 +4186,111 @@ async def show_accepted_offers(update: Update, context: ContextTypes.DEFAULT_TYP
     )
 
 async def show_today_assignments_info(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id=None):
-    """Показывает информацию о заданиях на текущий день"""
+    """Показывает информацию о заданиях на текущий день для ВСЕХ активных частей"""
     if not user_id:
         user_id = update.message.from_user.id
     
-    from database import get_current_arc, get_current_arc_day, get_user_local_time
-    from database import get_day_assignments_count
+    from database import get_user_active_arcs, get_current_arc_day, get_user_local_time
     
-    current_arc = get_current_arc()
-    if not current_arc:
-        return "Сейчас между разделами перерыв."
+    active_arcs = get_user_active_arcs(user_id)
     
-    arc_id, arc_title = current_arc
-    day_info = get_current_arc_day(user_id, arc_id)
+    if not active_arcs:
+        return "Сейчас нет активных потоков."
     
-    if not day_info or day_info['day_number'] == 0:
-        return "Часть тренинга еще не начался."
+    messages = []
     
-    day_id = day_info['day_id']
-    day_title = day_info['day_title']
-    day_number = day_info['day_number']
-    
-    conn = sqlite3.connect('mentor_bot.db')
-    cursor = conn.cursor()
-    cursor.execute('''
-        SELECT a.title, a.доступно_до, 
-               upa.status as user_status
-        FROM assignments a
-        LEFT JOIN user_progress_advanced upa ON a.assignment_id = upa.assignment_id 
-            AND upa.user_id = ?
-        WHERE a.day_id = ? 
-        ORDER BY a.assignment_id
-    ''', (user_id, day_id))
+    for arc_id, arc_title, arc_start, arc_end, access_type in active_arcs:
+        day_info = get_current_arc_day(user_id, arc_id)
+        
+        if not day_info or day_info['day_number'] == 0:
+            continue
+        
+        day_id = day_info['day_id']
+        day_title = day_info['day_title']
+        day_number = day_info['day_number']
+        
+        conn = sqlite3.connect('mentor_bot.db')
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT a.title, a.доступно_до, 
+                   upa.status as user_status
+            FROM assignments a
+            LEFT JOIN user_progress_advanced upa ON a.assignment_id = upa.assignment_id 
+                AND upa.user_id = ?
+            WHERE a.day_id = ? 
+            ORDER BY a.assignment_id
+        ''', (user_id, day_id))
 
-    assignments = cursor.fetchall()
-    
-    deadline_hour, deadline_minute = 12, 0
-    if assignments and assignments[0][1]:
-        try:
-            time_str = str(assignments[0][1])
-            if ':' in time_str:
-                deadline_hour, deadline_minute = map(int, time_str.split(':'))
-        except:
-            pass
-    
-    conn.close()
-    
-    user_time = get_user_local_time(user_id)
-    current_hour = user_time.hour
-    current_minute = user_time.minute
-    
-    is_day_available = (current_hour < deadline_hour or 
-                       (current_hour == deadline_hour and current_minute < deadline_minute))
+        assignments = cursor.fetchall()
+        
+        deadline_hour, deadline_minute = 12, 0
+        if assignments and assignments[0][1]:
+            try:
+                time_str = str(assignments[0][1])
+                if ':' in time_str:
+                    deadline_hour, deadline_minute = map(int, time_str.split(':'))
+            except:
+                pass
+        
+        conn.close()
+        
+        user_time = get_user_local_time(user_id)
+        current_hour = user_time.hour
+        current_minute = user_time.minute
+        
+        is_day_available = (current_hour < deadline_hour or 
+                           (current_hour == deadline_hour and current_minute < deadline_minute))
 
-    conn = sqlite3.connect('mentor_bot.db')
-    cursor = conn.cursor()
-    cursor.execute('SELECT order_num FROM arcs WHERE arc_id = ?', (arc_id,))
-    arc_result = cursor.fetchone()
-    arc_number = arc_result[0] if arc_result else '?'
-    conn.close()
-    
-    all_submitted_or_approved = True
-    if assignments:
-        for title, available_until, user_status in assignments:
-            if user_status not in ['submitted', 'approved']:
-                all_submitted_or_approved = False
-                break
+        conn = sqlite3.connect('mentor_bot.db')
+        cursor = conn.cursor()
+        cursor.execute('SELECT order_num FROM arcs WHERE arc_id = ?', (arc_id,))
+        arc_result = cursor.fetchone()
+        arc_number = arc_result[0] if arc_result else '?'
+        conn.close()
+        
+        all_submitted_or_approved = True
+        if assignments:
+            for title, available_until, user_status in assignments:
+                if user_status not in ['submitted', 'approved']:
+                    all_submitted_or_approved = False
+                    break
 
-    message = f"📅 **{day_title}** (Часть {arc_number})\n\n"
+        message = f"📅 **{day_title}** (Поток: {arc_title})\n\n"
 
-    if all_submitted_or_approved and assignments:
-        message += "🎉 **Вы выполнили все задания на сегодня!**\n"
-        message += "Новые задания откроются завтра в 06:00\n\n"
-    
-    elif is_day_available and assignments:
-        message += "✅ **Задания на текущий день доступны!**\n"
-        message += f"Дедлайн: до {deadline_hour:02d}:{deadline_minute:02d}\n\n"
-    
-    elif not is_day_available and assignments:
-        message += f"⏰ **Время выполнения заданий на сегодня истекло!**\n"
-        message += f"Задания текущего дня уже закрыты (дедлайн был до {deadline_hour:02d}:{deadline_minute:02d}).\n"
-        message += "Новые задания откроются завтра в 06:00\n\n"
+        if all_submitted_or_approved and assignments:
+            message += "🎉 **Вы выполнили все задания на сегодня!**\n"
+            message += "Новые задания откроются завтра в 06:00\n\n"
+        
+        elif is_day_available and assignments:
+            message += "✅ **Задания на текущий день доступны!**\n"
+            message += f"Дедлайн: до {deadline_hour:02d}:{deadline_minute:02d}\n\n"
+        
+        elif not is_day_available and assignments:
+            message += f"⏰ **Время выполнения заданий на сегодня истекло!**\n"
+            message += f"Задания текущего дня уже закрыты (дедлайн был до {deadline_hour:02d}:{deadline_minute:02d}).\n"
+            message += "Новые задания откроются завтра в 06:00\n\n"
 
-    if assignments and not all_submitted_or_approved:
-        for i, (title, available_until, user_status) in enumerate(assignments, 1):
-            status_icon = "✅" if user_status in ['submitted', 'approved'] else "📝"
-            time_text = f" - доступно до {available_until or '12:00'}"
-            message += f"{i}. {status_icon} **{title}**{time_text}\n"
+        if assignments and not all_submitted_or_approved:
+            for i, (title, available_until, user_status) in enumerate(assignments, 1):
+                status_icon = "✅" if user_status in ['submitted', 'approved'] else "📝"
+                time_text = f" - доступно до {available_until or '12:00'}"
+                message += f"{i}. {status_icon} **{title}**{time_text}\n"
+        
+            message += "\n"
+        
+        message += "💡 **Важно:**\n"
+        message += "• Задания должны быть выполнены до указанного времени\n"
+        message += "• Если задание не выполнено вовремя, оно засчитывается как пропущенное\n"
+        message += "• Пропуски отображаются в разделе 'Мой прогресс'\n"
+        message += "• Задания, завершившиеся до получения доступа, не считаются пропусками\n\n"
+        
+        messages.append(message)
     
-        message += "\n"
+    if not messages:
+        return "На сегодня нет активных заданий в ваших потоках."
     
-    message += "💡 **Важно:**\n"
-    message += "• Задания должны быть выполнены до указанного времени\n"
-    message += "• Если задание не выполнено вовремя, оно засчитывается как пропущенное\n"
-    message += "• Пропуски отображаются в разделе 'Мой прогресс'\n"
-    message += "• Задания, завершившиеся до получения доступа, не считаются пропусками\n\n"
-    
-    return message
+    return "\n" + "="*40 + "\n".join(messages)
 
 async def show_quick_guide(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показывает краткое руководство по работе с заданиями"""
@@ -5169,34 +5138,56 @@ async def show_assignment_from_list(update: Update, context: ContextTypes.DEFAUL
     user_id = update.message.from_user.id
     text = update.message.text
     
-    assignment_text = text.replace("📝 ", "").strip()
-
-    if " (" in assignment_text:
-        assignment_title = assignment_text.split(" (")[0].strip()
-    else:
-        assignment_title = assignment_text
-
-    available_assignments = context.user_data.get('available_assignments', {}).get('assignments', [])
+    # Ищем задание в mapping (а не в старом available_assignments)
+    mapping = context.user_data.get('assignments_mapping', [])
+    assignment_info = None
     
-    selected_assignment = None
-    for assignment in available_assignments:
-        if assignment['title'] == assignment_title:
-            selected_assignment = assignment
+    for info in mapping:
+        if info['btn_text'] == text:
+            assignment_info = info
             break
     
-    if not selected_assignment:
+    if not assignment_info:
         await update.message.reply_text("❌ Задание не найдено")
         return
     
-    assignment_id = selected_assignment['assignment_id']
-    day_id = None
+    assignment_id = assignment_info['assignment_id']
+    arc_id = assignment_info['arc_id']  # ← ВАЖНО!
     
+    # Проверяем статус задания
+    from database import check_assignment_status
+    status = check_assignment_status(user_id, assignment_id)
+    
+    if status == 'submitted':
+        await update.message.reply_text(
+            "🟡 **Это задание уже на проверке!**\n\n"
+            "Ждите ответа психолога в разделе 'Ответ психолога'.",
+            parse_mode='Markdown'
+        )
+        return
+    
+    if status == 'approved':
+        await update.message.reply_text(
+            "✅ **Это задание уже проверено!**\n\n"
+            "Ответ психолога доступен в разделе 'Ответ психолога'.",
+            parse_mode='Markdown'
+        )
+        return
+    
+    # Сохраняем данные (ВАЖНО: arc_id!)
+    context.user_data['current_assignment'] = assignment_info['title']
+    context.user_data['current_assignment_id'] = assignment_id
+    context.user_data['current_arc_id'] = arc_id  # ← СОХРАНЯЕМ!
+    
+    # Получаем day_id
     conn = sqlite3.connect('mentor_bot.db')
     cursor = conn.cursor()
     cursor.execute('SELECT day_id FROM assignments WHERE assignment_id = ?', (assignment_id,))
     result = cursor.fetchone()
+    
     if result:
-        day_id = result[0]
+        context.user_data['current_day_id'] = result[0]
+    
     conn.close()
     
     if not day_id:
@@ -5225,6 +5216,8 @@ async def show_assignment_from_list(update: Update, context: ContextTypes.DEFAUL
     context.user_data['current_assignment'] = assignment_title
     context.user_data['current_assignment_id'] = assignment_id
     context.user_data['current_day_id'] = day_id
+    context.user_data['current_arc_id'] = assignment_info['arc_id']
+    context.user_data['current_arc_title'] = assignment_info['arc_title']
     context.user_data['answering'] = True
     context.user_data['answer_text'] = None
     context.user_data['answer_files'] = []

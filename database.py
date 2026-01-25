@@ -3241,4 +3241,25 @@ def set_user_as_admin(user_id):
     print(f"✅ Пользователь {user_id} установлен как администратор")
 
 
+def get_user_active_arcs(user_id):
+    """Получает ВСЕ активные части пользователя (дата_начала <= сегодня <= дата_окончания)"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT a.arc_id, a.title, a.дата_начала, a.дата_окончания, uaa.access_type
+        FROM user_arc_access uaa
+        JOIN arcs a ON uaa.arc_id = a.arc_id
+        WHERE uaa.user_id = ? 
+          AND a.дата_начала <= DATE('now') 
+          AND a.дата_окончания >= DATE('now')
+          AND a.status = 'active'
+        ORDER BY a.дата_начала
+    ''', (user_id,))
+    
+    arcs = cursor.fetchall()
+    conn.close()
+    return arcs
+
+
 
