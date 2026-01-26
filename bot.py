@@ -205,6 +205,21 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await show_assignment_for_admin(update, context)
         return
 
+    # 1. Сначала проверяем статистику
+    if text == "📊 Мой прогресс":
+        await show_statistics(update, context)
+        return
+    
+    # 2. Если находимся в меню статистики И текст содержит эмодзи части
+    if current_section == 'statistics_menu' and text.startswith(("🔄", "⏳", "✅")):
+        await show_arc_statistics(update, context)
+        return
+    
+    # 3. Если нажали "Выбрать другую часть" в статистике
+    if text == "📊 К выбору марафона":
+        await show_statistics(update, context)
+        return
+
     # 1. Обработка кнопки "🎯 Купить тренинг"
     if text == "🎯 Купить тренинг":
         keyboard = [
@@ -290,6 +305,36 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await back_handlers[current_section][text](update, context)
             return
 
+    # Обработка статистики админа
+    if text == "📊 Прогресс участников":
+        await show_users_stats(update, context)
+        return
+    
+    # Если находимся в меню статистики админа
+    if context.user_data.get('current_section') == 'admin_stats':
+        # Выбор участника по цветным кнопкам
+        if text.startswith(("🟢", "🟡", "🟠", "🔴")):
+            await show_admin_user_statistics(update, context)
+            return
+        
+        # Выбор части участника
+        if text.startswith(("🔄", "⏳", "✅")):
+            await show_admin_arc_statistics(update, context)
+            return
+        
+        # Навигация
+        if text == "👤 Выбрать другого участника":
+            await show_users_stats(update, context)
+            return
+        
+        if text == "📊 Посмотреть другую часть этого участника":
+            user_info = context.user_data.get('admin_current_user')
+            if user_info:
+                await show_admin_user_statistics(update, context)
+            else:
+                await show_users_stats(update, context)
+            return
+
     # 1. Сначала ВСЕ уникальные кнопки которые точно определены
     unique_buttons = {
         "✅ Отправить задание": submit_assignment,
@@ -315,7 +360,6 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "💬 Личная консультация": request_personal_consultation,
         "💰 Купить доступ": show_course_main,
         "Перейти в каталог тренинга": show_course_main,
-        "📊 Мой прогресс": show_statistics,
         "🔧 Изменение доступа": manage_access,
         "👥 Перейти в сообщество": go_to_community,
         "📊 Прогресс участников": show_users_stats,
@@ -1026,8 +1070,11 @@ async def show_available_assignments(update: Update, context: ContextTypes.DEFAU
     arcs_summary = []
     for arc_id, arc_title, arc_start, arc_end, access_type in active_arcs:
         day_info = get_current_arc_day(user_id, arc_id)
-        if day_info and day_info['day_number'] > 0:
-            arcs_summary.append(f"• {arc_title} (день {day_info['day_number']})")
+        if not day_info or day_info.get('day_number') is None or day_info['day_number'] == 0:
+            print(f"⚠️ Часть {arc_title}: день не определен или равен 0")
+            continue  # Пропускаем эту часть
+        
+        current_day_num = day_info['day_number']
     
     if arcs_summary:
         message += "**Активные потоки:**\n" + "\n".join(arcs_summary) + "\n\n"
@@ -3059,125 +3106,236 @@ async def reload_full(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Нет доступа")
 
 async def show_statistics(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показывает статистику пользователя"""
+    """Показывает список частей для выбора статистики"""
+    context.user_data['current_section'] = 'statistics_menu'
     user_id = update.message.from_user.id
     
-    from config import ADMIN_ID
-    if is_admin(user_id):
+    from database import get_user_active_arcs, get_current_arc_day
+    
+    # Получаем ВСЕ части пользователя (и активные, и завершенные)
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT DISTINCT a.arc_id, a.title, a.дата_начала, a.дата_окончания,
+               CASE 
+                   WHEN DATE('now') < a.дата_начала THEN 'future'
+                   WHEN DATE('now') > a.дата_окончания THEN 'past' 
+                   ELSE 'active'
+               END as status
+        FROM user_arc_access uaa
+        JOIN arcs a ON uaa.arc_id = a.arc_id
+        WHERE uaa.user_id = ?
+        ORDER BY a.дата_начала DESC
+    ''', (user_id,))
+    
+    user_arcs = cursor.fetchall()
+    conn.close()
+    
+    if not user_arcs:
+        await update.message.reply_text(
+            "📊 **У вас пока нет доступа к частям тренинга.**\n\n"
+            "Приобретите доступ в разделе 'Купить тренинг'.",
+            parse_mode='Markdown'
+        )
+        return
+    
+    # Формируем клавиатуру
+    keyboard = []
+    
+    for arc_id, arc_title, arc_start, arc_end, status in user_arcs:
+        # Определяем эмодзи и текст для кнопки
+        if status == 'active':
+            emoji = "🔄"
+            status_text = "идёт сейчас"
+        elif status == 'future':
+            emoji = "⏳"
+            status_text = "начнётся"
+        else:
+            emoji = "✅"
+            status_text = "завершена"
+        
+        # Форматируем дату начала
+        if isinstance(arc_start, str):
+            start_date = arc_start.split()[0] if ' ' in arc_start else arc_start
+        else:
+            start_date = str(arc_start)
+        
+        # Создаем текст кнопки
+        btn_text = f"{emoji} {arc_title}"
+        keyboard.append([btn_text])
+        
+        # Сохраняем mapping для обработки
+        if 'statistics_arc_map' not in context.user_data:
+            context.user_data['statistics_arc_map'] = {}
+        
+        context.user_data['statistics_arc_map'][btn_text] = {
+            'arc_id': arc_id,
+            'arc_title': arc_title,
+            'status': status,
+            'start_date': start_date
+        }
+    
+    keyboard.append(["🔙 В раздел Мои задания"])
+    
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    
+    # Формируем сообщение
+    message = "📊 **МОЙ ПРОГРЕСС**\n\n"
+    message += "Выберите часть для просмотра статистики:\n\n"
+    
+    # Добавляем пояснение по статусам
+    message += "**Обозначения:**\n"
+    message += "• 🔄 - часть идёт сейчас\n"
+    message += "• ⏳ - часть начнётся в будущем\n"
+    message += "• ✅ - часть завершена\n\n"
+    
+    # Краткая сводка по всем частям
+    active_count = sum(1 for _, _, _, _, status in user_arcs if status == 'active')
+    future_count = sum(1 for _, _, _, _, status in user_arcs if status == 'future')
+    past_count = sum(1 for _, _, _, _, status in user_arcs if status == 'past')
+    
+    message += f"📈 **Ваши части:**\n"
+    message += f"• 🔄 Активные: {active_count}\n"
+    message += f"• ⏳ Будущие: {future_count}\n"
+    message += f"• ✅ Завершённые: {past_count}\n"
+    
+    await update.message.reply_text(
+        message,
+        reply_markup=reply_markup,
+        parse_mode='Markdown'
+    )
+
+
+async def show_arc_statistics(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает статистику по выбранной части"""
+    user_id = update.message.from_user.id
+    text = update.message.text
+    
+    # Получаем данные о выбранной части
+    arc_map = context.user_data.get('statistics_arc_map', {})
+    arc_info = arc_map.get(text)
+    
+    if not arc_info:
+        await update.message.reply_text("❌ Часть не найдена")
+        return
+    
+    arc_id = arc_info['arc_id']
+    arc_title = arc_info['arc_title']
+    status = arc_info['status']
+    start_date = arc_info['start_date']
+    
+    from database import get_user_skip_statistics, get_current_arc_day
+    
+    # Получаем статистику пропусков
+    stats = get_user_skip_statistics(user_id, arc_id)
+    
+    # Получаем текущий день для активной части
+    current_day_info = None
+    if status == 'active':
+        current_day_info = get_current_arc_day(user_id, arc_id)
+    
+    # Формируем сообщение
+    message = f"📊 **СТАТИСТИКА: {arc_title}**\n\n"
+    
+    # Информация о статусе части
+    if status == 'active':
+        message += f"🔄 **Статус:** Часть идёт сейчас\n"
+        if current_day_info:
+            message += f"📅 **Текущий день:** {current_day_info['day_number']} из 28\n"
+    elif status == 'future':
+        message += f"⏳ **Статус:** Начнётся {start_date}\n"
+    else:
+        message += f"✅ **Статус:** Часть завершена\n"
+    
+    message += f"📅 **Дата начала:** {start_date}\n\n"
+    
+    # Статистика выполнения (только для активных и завершенных частей)
+    if status in ['active', 'past'] and stats:
+        total_days = stats.get('total_days', 0)
+        completed_days = stats.get('completed_days', 0)
+        skipped_days = stats.get('skipped_days', 0)
+        streak_days = stats.get('streak_days', 0)
+        completion_rate = stats.get('completion_rate', 0)
+        
+        message += "📈 **СТАТИСТИКА ВЫПОЛНЕНИЯ**\n"
+        message += f"• 📅 Всего дней в части: {total_days}\n"
+        message += f"• ✅ Выполнено дней: {completed_days}\n"
+        message += f"• ❌ Пропущено дней: {skipped_days}\n"
+        message += f"• 📊 Процент выполнения: {completion_rate}%\n"
+        
+        if streak_days > 0:
+            message += f"• 🔥 Серия выполнения: {streak_days} дней подряд\n"
+        
+        message += "\n"
+        
+        # Пропущенные дни (первые 5)
+        skipped_list = stats.get('skipped_days_list', [])
+        if skipped_list:
+            message += "📋 **Пропущенные дни:**\n"
+            for day_title in skipped_list[:5]:
+                message += f"• {day_title}\n"
+            if len(skipped_list) > 5:
+                message += f"• ... и ещё {len(skipped_list) - 5} дней\n"
+            message += "\n"
+    
+    # Статистика по заданиям (если часть активна или завершена)
+    if status in ['active', 'past']:
         conn = sqlite3.connect('mentor_bot.db')
         cursor = conn.cursor()
         
+        # Считаем задания
         cursor.execute('''
-            SELECT MIN(DATE(submitted_at)) 
-            FROM user_progress_advanced 
-            WHERE user_id = ?
-        ''', (user_id,))
+            SELECT 
+                COUNT(DISTINCT a.assignment_id) as total_assignments,
+                SUM(CASE WHEN upa.status IN ('submitted', 'approved') THEN 1 ELSE 0 END) as completed_assignments,
+                SUM(CASE WHEN upa.status = 'submitted' THEN 1 ELSE 0 END) as in_progress_assignments,
+                SUM(CASE WHEN upa.status = 'approved' THEN 1 ELSE 0 END) as approved_assignments
+            FROM assignments a
+            JOIN days d ON a.day_id = d.day_id
+            LEFT JOIN user_progress_advanced upa ON a.assignment_id = upa.assignment_id AND upa.user_id = ?
+            WHERE d.arc_id = ?
+        ''', (user_id, arc_id))
         
-        first_assignment_date = cursor.fetchone()[0]
-        
-        if first_assignment_date:
-            purchased_date = first_assignment_date
-        else:
-            cursor.execute('SELECT DATE(DATE("now"), "-10 days")')
-            purchased_date = cursor.fetchone()[0]
-        
-        cursor.execute('''
-            INSERT OR REPLACE INTO user_arc_access 
-            (user_id, arc_id, access_type, purchased_at)
-            VALUES (?, 1, 'admin', ?)
-        ''', (ADMIN_ID, purchased_date))
-        
-        conn.commit()
+        result = cursor.fetchone()
         conn.close()
-    
-    from database import get_current_arc, get_user_skip_statistics, get_current_arc_day
-    
-    current_arc = get_current_arc()
-    if not current_arc:
-        await update.message.reply_text(
-            "📊 **Мой прогресс**\n\n"
-            "Сейчас между частями перерыв. Прогресс будет доступен с началом следующей части.",
-            parse_mode='Markdown'
-        )
-        return
-    
-    arc_id, arc_title = current_arc
-    
-    if arc_title.startswith("Часть"):
-        arc_display_name = f"Тренинг СВС: {arc_title}"
-    else:
-        arc_display_name = f"Тренинг СВС: {arc_title}"
-    
-    # Проверяем доступ
-    from database import check_user_arc_access
-    if not check_user_arc_access(user_id, arc_id) and user_id != ADMIN_ID:
-        await update.message.reply_text(
-            "📊 **Мой прогресс**\n\n"
-            "У вас нет доступа к текущей части. Купите доступ в разделе '🎯 Каталог тренингов'.",
-            parse_mode='Markdown'
-        )
-        return
-    
-    # Получаем статистику
-    stats = get_user_skip_statistics(user_id, arc_id)
-    
-    # Формируем сообщение
-    message = f"📊 **Ваш прогресс по заданиям**\n\n"
-    message += f"**{arc_display_name}**\n\n"
-    
-    # Основные метрики
-    message += "**Основные показатели:**\n"
-    if stats['start_date']:
-        message += f"• **Начало:** {stats['start_date'].strftime('%d.%m.%Y')}\n"
-    
-    if stats['current_day'] > 0:
-        message += f"• **Текущий день:** {stats['current_day']}\n"
-    
-    if stats['participation_days'] > 0:
-        message += f"• **Участвуете дней:** {stats['participation_days']}\n"
-    
-    message += f"• **Серия без пропусков:** {stats['streak_days']} дней\n\n"
-    
-    message += "**Статистика заданий:**\n"
-    message += f"• **Всего:** 40 + Отчет\n"
-    message += f"• **Выполнено:** {stats['completed_assignments']}\n"
-    message += f"• **На проверке:** {stats['submitted_assignments']}\n"
-    #message += f"• ⏭️ **Пропущено:** {stats['skipped_assignments']}\n"
-    
-    # Процент выполнения с пояснением
-    message += f"• **Процент выполнения:** {stats['completion_rate']}%\n"
-    message += f"  _(от общего количества заданий {arc_display_name})_\n\n"
-    
-    # Пропущенные задания
-    if stats['skipped_assignments'] > 0:
-        message += f"📋 **Пропущенные задания:**\n"
-        for i, skipped in enumerate(stats['skipped_list'], 1):
-            message += f"{skipped['assignment']}\n"
         
-        if stats['skipped_assignments'] > 10:
-            message += f"... и еще {stats['skipped_assignments'] - 10} заданий\n"
-    else:
-        message += "**Пропущенных заданий нет!**\n\n"
+        if result:
+            total_assignments, completed, in_progress, approved = result
+            
+            if total_assignments > 0:
+                completion_percent = int((completed / total_assignments) * 100) if total_assignments > 0 else 0
+                
+                message += "📝 **СТАТИСТИКА ПО ЗАДАНИЯМ**\n"
+                message += f"• 📋 Всего заданий: {total_assignments}\n"
+                message += f"• ✅ Выполнено: {completed} ({completion_percent}%)\n"
+                if in_progress > 0:
+                    message += f"• 🟡 На проверке: {in_progress}\n"
+                message += f"• 💬 Проверено психологом: {approved}\n\n"
     
-    # Мотивационные сообщения
-    if stats['completion_rate'] >= 90:
-        message += "\n🎉 **Отличный результат!** Вы пример для подражания!\n"
-    elif stats['completion_rate'] >= 70:
-        message += "\n💪 **Хорошая работа!** Продолжайте в том же духе!\n"
-    elif stats['completion_rate'] >= 50:
-        message += "\n👍 **Неплохо!** Есть куда стремиться.\n"
-    else:
-        message += "\n💡 **Попробуйте уделять больше времени заданиям.**\n"
+    # Рекомендации в зависимости от статуса
+    if status == 'future':
+        message += "💡 **Рекомендация:**\n"
+        message += f"Часть начнётся {start_date}. Подготовьтесь к началу!\n"
+    elif status == 'active':
+        if stats and stats.get('completion_rate', 0) < 70:
+            message += "💡 **Рекомендация:**\n"
+            message += "Старайтесь выполнять задания регулярно для лучшего результата!\n"
+        else:
+            message += "💡 **Рекомендация:**\n"
+            message += "Отличный прогресс! Продолжайте в том же духе!\n"
+    elif status == 'past':
+        if stats and stats.get('completion_rate', 0) >= 80:
+            message += "🎉 **Поздравляем!**\n"
+            message += "Вы успешно завершили эту часть тренинга!\n"
+        else:
+            message += "💡 **Рекомендация:**\n"
+            message += "В следующей части постарайтесь выполнять больше заданий!\n"
     
-    # Серия без пропусков - особое поздравление
-    if stats['streak_days'] >= 7:
-        message += f"\n🔥 **Вау! {stats['streak_days']} дней без пропусков!** Супер дисциплина!\n"
-    elif stats['streak_days'] >= 3:
-        message += f"\n✨ **Отлично! {stats['streak_days']} дня подряд!** Так держать!\n"
-    
+    # Клавиатура
     keyboard = [
-        ["📝 Доступные задания", "💬 Ответ психолога"],
-        ["📚 В раздел Мои задания"]
+        ["📊 К выбору марафона"],
+        ["📚 Мои задания"]
     ]
     
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
@@ -3470,114 +3628,86 @@ async def show_user_arcs_access_callback(query, context, user_id):
     await query.edit_message_text(message, reply_markup=reply_markup, parse_mode='Markdown')
 
 async def show_users_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показывает список участников для просмотра статистики"""
+    """Показывает список участников для просмотра статистики (админ)"""
     context.user_data['current_section'] = 'admin_stats'
-    
-    from database import get_current_arc, get_user_skip_statistics
-    current_arc = get_current_arc()
-    
-    if not current_arc:
-        await update.message.reply_text(
-            "📊 **Статистика участников**\n\n"
-            "Сейчас между частями тренинга перерыв. Статистика будет доступна с началом следующей части.",
-            parse_mode='Markdown'
-        )
-        return
-    
-    arc_id, arc_title = current_arc
-    
-    if arc_title.startswith("Часть"):
-        arc_display_name = f"Тренинг СВС: {arc_title}"
-    else:
-        arc_display_name = f"Тренинг СВС: {arc_title}"
     
     conn = sqlite3.connect('mentor_bot.db')
     cursor = conn.cursor()
     
+    # Получаем всех пользователей с ФИО или username
     cursor.execute('''
-        SELECT DISTINCT u.user_id, 
-               COALESCE(u.fio, u.username, 'ID:' || u.user_id) as display_name
+        SELECT u.user_id, 
+               COALESCE(u.fio, u.username, 'ID:' || u.user_id) as display_name,
+               COUNT(DISTINCT uaa.arc_id) as arc_count
         FROM users u
-        JOIN user_arc_access uaa ON u.user_id = uaa.user_id
-        WHERE uaa.arc_id = ?
-    ''', (arc_id,))
+        LEFT JOIN user_arc_access uaa ON u.user_id = uaa.user_id
+        GROUP BY u.user_id
+        ORDER BY 
+            CASE WHEN u.fio IS NOT NULL THEN 1 ELSE 2 END,
+            display_name
+        LIMIT 50
+    ''')
     
     users = cursor.fetchall()
     conn.close()
     
     if not users:
-        await update.message.reply_text(
-            f"📊 **Статистика участников - {arc_display_name}**\n\n"
-            "Нет пользователей с доступом к текущей части.",
-            parse_mode='Markdown'
-        )
+        await update.message.reply_text("❌ Нет пользователей в системе")
         return
     
-    users_with_stats = []
-    for user_id, display_name in users:
-        stats = get_user_skip_statistics(user_id, arc_id)
-        users_with_stats.append({
-            'user_id': user_id,
-            'display_name': display_name,
-            'stats': stats,
-            'percent': stats.get('completion_rate', 0),
-            'skipped': stats.get('skipped_assignments', 0)
-        })
-    
-    users_with_stats.sort(key=lambda x: (-x['skipped'], x['percent']))
-    
     keyboard = []
-    for user_data in users_with_stats:
-        user_id = user_data['user_id']
-        display_name = user_data['display_name']
-        stats = user_data['stats']
-        percent = user_data['percent']
-        skipped = user_data['skipped']
-        
+    user_mapping = {}
+    
+    for user_id, display_name, arc_count in users:
+        # Обрезаем длинные имена
         if len(display_name) > 25:
             display_name = display_name[:22] + "..."
         
-        if percent >= 95:
-            icon = "🟢"
-        elif percent >= 85:
-            icon = "🟡"
-        elif percent >= 75:
-            icon = "🟠"
+        # Определяем цвет по активности
+        conn2 = sqlite3.connect('mentor_bot.db')
+        cursor2 = conn2.cursor()
+        cursor2.execute('''
+            SELECT COUNT(*) FROM user_progress_advanced 
+            WHERE user_id = ? AND status IN ('submitted', 'approved')
+        ''', (user_id,))
+        
+        activity_count = cursor2.fetchone()[0]
+        conn2.close()
+        
+        # Цвета по активности
+        if activity_count == 0:
+            emoji = "🔴"  # Нет активности
+        elif activity_count < 5:
+            emoji = "🟠"  # Мало активности
+        elif activity_count < 20:
+            emoji = "🟡"  # Средняя активность
         else:
-            icon = "🔴"
+            emoji = "🟢"  # Высокая активность
         
-        warning = " ⚠️" if skipped >= 3 else ""
-        
-        completed = stats.get('completed_assignments', 0)
-        submitted = stats.get('submitted_assignments', 0)
-        total_completed = completed + submitted
-        
-        btn_text = f"{icon}{warning} {display_name} ({total_completed}/{40})"
+        btn_text = f"{emoji} {display_name} ({arc_count})"
         keyboard.append([btn_text])
         
-        if 'stats_user_map' not in context.user_data:
-            context.user_data['stats_user_map'] = {}
-        context.user_data['stats_user_map'][btn_text] = user_id
+        user_mapping[btn_text] = {
+            'user_id': user_id,
+            'display_name': display_name,
+            'arc_count': arc_count,
+            'activity_count': activity_count
+        }
     
     keyboard.append(["🔙 Назад к проверке"])
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     
-    message = f"📊 **Статистика участников - {arc_display_name}**\n\n"
-    message += "👥 **Выше в списке тот:**\n"
-    message += "1. ⚠️ У кого больше пропусков заданий\n"
-    message += "2. 📉 У кого хуже процент выполнения заданий\n\n"
-    
-    message += "🎯 **Метрики в кнопках:**\n"
-    message += "• 🟢 >95%  🟡 85-94%\n"
-    message += "• 🟠 75-84%  🔴 <85%\n"
-    message += "• ⚠️ появляется когда 3+ пропусков\n"
-    message += "• (Выполнено/40) - выполненные задания из 40\n\n"
-    
-    message += "**Обозначения:**\n"
-    message += "• ✅ - выполнено и проверено\n"
-    message += "• ⏳ - отправлено на проверку\n\n"
-    
+    # Пояснение по цветам
+    message = "📊 **Статистика участников (админ)**\n\n"
+    message += "**Цвета по активности:**\n"
+    message += "• 🟢 Высокая активность (>20 заданий)\n"
+    message += "• 🟡 Средняя активность (5-20 заданий)\n"
+    message += "• 🟠 Низкая активность (1-5 заданий)\n"
+    message += "• 🔴 Нет активности\n\n"
+    message += "Число в скобках - количество доступов к частям\n\n"
     message += "Выберите участника:"
+    
+    context.user_data['admin_stats_users'] = user_mapping
     
     await update.message.reply_text(
         message,
@@ -3585,156 +3715,556 @@ async def show_users_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
 
-async def show_user_statistics_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показывает детальную статистику выбранного участника (для админа)"""
-    user_text = update.message.text
-    user_map = context.user_data.get('stats_user_map', {})
-    user_id = user_map.get(user_text)
+
+async def show_admin_user_statistics(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает меню выбора части для просмотра статистики пользователя (админ)"""
+    text = update.message.text
     
-    if not user_id:
-        await update.message.reply_text("❌ Участник не найден")
+    user_mapping = context.user_data.get('admin_stats_users', {})
+    user_info = user_mapping.get(text)
+    
+    if not user_info:
+        await update.message.reply_text("❌ Пользователь не найден")
         return
     
+    user_id = user_info['user_id']
+    display_name = user_info['display_name']
+    
+    # Получаем части пользователя
     conn = sqlite3.connect('mentor_bot.db')
     cursor = conn.cursor()
     
-    # Получаем данные пользователя
-    cursor.execute('SELECT fio, username, city FROM users WHERE user_id = ?', (user_id,))
-    user_info = cursor.fetchone()
-    fio, username, city = user_info if user_info else (None, None, None)
+    cursor.execute('''
+        SELECT DISTINCT a.arc_id, a.title, a.дата_начала, a.дата_окончания,
+               CASE 
+                   WHEN DATE('now') < a.дата_начала THEN 'future'
+                   WHEN DATE('now') > a.дата_окончания THEN 'past' 
+                   ELSE 'active'
+               END as status
+        FROM user_arc_access uaa
+        JOIN arcs a ON uaa.arc_id = a.arc_id
+        WHERE uaa.user_id = ?
+        ORDER BY a.дата_начала DESC
+    ''', (user_id,))
     
-    # Формируем отображаемое имя
-    if fio:
-        display_name = fio
-    elif username:
-        display_name = f"@{username}"
-    else:
-        display_name = f"ID: {user_id}"
+    user_arcs = cursor.fetchall()
+    conn.close()
     
-    # Формируем тег для быстрого перехода
-    if username:
-        # Если есть username - делаем кликабельную ссылку
-        user_tag = f"[@{username}](https://t.me/{username})"
-    else:
-        # Если username нет - показываем ID
-        user_tag = f"ID: `{user_id}`"
-    
-    from database import get_current_arc, get_user_skip_statistics
-    current_arc = get_current_arc()
-    
-    if not current_arc:
-        await update.message.reply_text("❌ Нет активной дуги")
-        conn.close()
+    if not user_arcs:
+        await update.message.reply_text(f"❌ У пользователя {display_name} нет доступа к частям")
         return
     
-    arc_id, arc_title = current_arc
+    # Сохраняем данные пользователя
+    context.user_data['admin_current_user'] = {
+        'user_id': user_id,
+        'display_name': display_name
+    }
     
+    # Формируем клавиатуру
+    keyboard = []
+    arc_mapping = {}
+    
+    for arc_id, arc_title, arc_start, arc_end, status in user_arcs:
+        # Определяем эмодзи
+        if status == 'active':
+            emoji = "🔄"
+        elif status == 'future':
+            emoji = "⏳"
+        else:
+            emoji = "✅"
+        
+        btn_text = f"{emoji} {arc_title}"
+        keyboard.append([btn_text])
+        
+        arc_mapping[btn_text] = {
+            'arc_id': arc_id,
+            'arc_title': arc_title,
+            'status': status
+        }
+    
+    keyboard.append(["👤 Выбрать другого участника"])
+    keyboard.append(["🔙 Назад к проверке"])
+    
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    
+    context.user_data['admin_user_arcs_map'] = arc_mapping
+    
+    message = f"👤 **Статистика участника:** {display_name}\n\n"
+    message += "Выберите часть для просмотра статистики:\n\n"
+    message += "**Обозначения:**\n"
+    message += "• 🔄 - часть идёт сейчас\n"
+    message += "• ⏳ - часть начнётся в будущем\n"
+    message += "• ✅ - часть завершена\n"
+    
+    await update.message.reply_text(
+        message,
+        reply_markup=reply_markup,
+        parse_mode='Markdown'
+    )
+
+
+async def show_admin_arc_statistics(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает детальную статистику пользователя по выбранной части (админ)"""
+    text = update.message.text
+    
+    # Получаем данные пользователя
+    user_info = context.user_data.get('admin_current_user')
+    if not user_info:
+        await update.message.reply_text("❌ Ошибка: пользователь не выбран")
+        return
+    
+    user_id = user_info['user_id']
+    display_name = user_info['display_name']
+    
+    # Получаем данные части
+    arc_mapping = context.user_data.get('admin_user_arcs_map', {})
+    arc_info = arc_mapping.get(text)
+    
+    if not arc_info:
+        await update.message.reply_text("❌ Часть не найдена")
+        return
+    
+    arc_id = arc_info['arc_id']
+    arc_title = arc_info['arc_title']
+    status = arc_info['status']
+    
+    from database import get_user_skip_statistics, get_current_arc_day
+    
+    # Получаем статистику пропусков
     stats = get_user_skip_statistics(user_id, arc_id)
+    
+    # Получаем информацию о дне
+    current_day_info = None
+    if status == 'active':
+        current_day_info = get_current_arc_day(user_id, arc_id)
+    
+    # Получаем детальную статистику по заданиям
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    # Общая статистика по части
+    cursor.execute('''
+        SELECT 
+            COUNT(DISTINCT d.day_id) as total_days,
+            COUNT(DISTINCT a.assignment_id) as total_assignments
+        FROM days d
+        LEFT JOIN assignments a ON d.day_id = a.day_id
+        WHERE d.arc_id = ?
+    ''', (arc_id,))
+    
+    arc_stats = cursor.fetchone()
+    total_days = arc_stats[0] if arc_stats else 0
+    total_assignments = arc_stats[1] if arc_stats else 0
+    
+    # Статистика выполнения пользователем
+    cursor.execute('''
+        SELECT 
+            COUNT(DISTINCT CASE WHEN upa.status IN ('submitted', 'approved') THEN d.order_num END) as completed_days,
+            COUNT(CASE WHEN upa.status = 'submitted' THEN 1 END) as submitted_assignments,
+            COUNT(CASE WHEN upa.status = 'approved' THEN 1 END) as approved_assignments,
+            COUNT(CASE WHEN upa.status IS NULL THEN 1 END) as new_assignments,
+            MIN(upa.submitted_at) as first_submission,
+            MAX(upa.submitted_at) as last_submission
+        FROM days d
+        LEFT JOIN assignments a ON d.day_id = a.day_id
+        LEFT JOIN user_progress_advanced upa ON a.assignment_id = upa.assignment_id AND upa.user_id = ?
+        WHERE d.arc_id = ?
+    ''', (user_id, arc_id))
+    
+    user_stats = cursor.fetchone()
+    
+    # Статистика по дням
+    cursor.execute('''
+        SELECT d.order_num, d.title,
+               COUNT(DISTINCT a.assignment_id) as total_day_assignments,
+               COUNT(DISTINCT CASE WHEN upa.status IN ('submitted', 'approved') THEN a.assignment_id END) as completed_day_assignments
+        FROM days d
+        LEFT JOIN assignments a ON d.day_id = d.day_id
+        LEFT JOIN user_progress_advanced upa ON a.assignment_id = upa.assignment_id AND upa.user_id = ?
+        WHERE d.arc_id = ?
+        GROUP BY d.order_num, d.title
+        ORDER BY d.order_num
+    ''', (user_id, arc_id))
+    
+    days_stats = cursor.fetchall()
     
     conn.close()
     
-    # Форматируем название дуги
-    if arc_title.startswith("Дуга"):
-        arc_display_name = f"Тренинг СВС: {arc_title}"
-    else:
-        arc_display_name = f"Тренинг СВС: {arc_title}"
-    
     # Формируем сообщение
-    message = f"📊 **Статистика участника**\n\n"
-    message += f"**Участник:** {display_name}\n"
-    message += f"**Тег:** {user_tag}\n"
-    message += f"\n**{arc_display_name}**\n\n"
+    message = f"📊 **СТАТИСТИКА (АДМИН)**\n\n"
+    message += f"👤 **Участник:** {display_name}\n"
+    message += f"🔄 **Часть:** {arc_title}\n"
+    message += f"📊 **Статус:** {'Активна' if status == 'active' else 'Завершена' if status == 'past' else 'Будущая'}\n\n"
     
-    message += "📈 **Основные показатели:**\n"
-    if stats.get('start_date'):
-        try:
-            if isinstance(stats['start_date'], str):
-                from datetime import datetime
-                start_date = datetime.fromisoformat(stats['start_date']).date()
-                message += f"• **Начало:** {start_date.strftime('%d.%m.%Y')}\n"
-            else:
-                message += f"• **Начало:** {stats['start_date'].strftime('%d.%m.%Y')}\n"
-        except:
-            message += f"• **Начало:** {stats.get('start_date', 'Не определено')}\n"
+    if status == 'active' and current_day_info:
+        message += f"📅 **Текущий день:** {current_day_info['day_number']} из {total_days}\n\n"
     
-    if stats.get('current_day', 0) > 0:
-        message += f"• **Текущий день:** {stats['current_day']}\n"
+    # Общая статистика части
+    message += "📈 **ОБЩАЯ СТАТИСТИКА ЧАСТИ**\n"
+    message += f"• 📅 Всего дней: {total_days}\n"
+    message += f"• 📝 Всего заданий: {total_assignments}\n\n"
     
-    if stats.get('participation_days', 0) > 0:
-        message += f"• **Участвует дней:** {stats['participation_days']}\n"
-    
-    message += f"• **Серия без пропусков:** {stats.get('streak_days', 0)} дней\n\n"
-    
-    message += "**Статистика заданий:**\n"
-    message += f"• **Всего:** 40 + Отчет\n"
-    message += f"• **Выполнено:** {stats.get('completed_assignments', 0)}\n"
-    message += f"• **На проверке:** {stats.get('submitted_assignments', 0)}\n"
-    message += f"• **Процент выполнения:** {stats.get('completion_rate', 0)}%\n"
-    message += f"  _(от общего количества заданий {arc_display_name})_\n\n"
-    
-    skipped_count = stats.get('skipped_assignments', 0)
-    if skipped_count > 0:
-        message += f"📋 **Пропущенные задания ({skipped_count}):**\n"
+    # Статистика пользователя
+    if user_stats:
+        completed_days, submitted, approved, new, first_sub, last_sub = user_stats
         
-        skipped_list = stats.get('skipped_list', [])
-        if skipped_list:
-            for i, skipped in enumerate(skipped_list[:10], 1):
-                day = skipped.get('day', 'Неизвестно')
-                assignment = skipped.get('assignment', 'Неизвестно')
-                message += f"{i}. {day} - {assignment}\n"
+        message += "👤 **СТАТИСТИКА УЧАСТНИКА**\n"
+        message += f"• ✅ Выполнено дней: {completed_days}/{total_days}\n"
+        
+        if total_assignments > 0:
+            completed_total = submitted + approved
+            completion_percent = int((completed_total / total_assignments) * 100)
             
-            if skipped_count > 10:
-                message += f"... и еще {skipped_count - 10} заданий\n"
-        else:
-            message += "_(список недоступен)_\n"
+            message += f"• 📝 Выполнено заданий: {completed_total}/{total_assignments} ({completion_percent}%)\n"
+            message += f"  ├ 🟡 На проверке: {submitted}\n"
+            message += f"  ├ 💬 Проверено: {approved}\n"
+            message += f"  └ 🔵 Новых: {new}\n\n"
+        
+        if first_sub:
+            message += f"• 🎯 Первая отправка: {first_sub[:10]}\n"
+        if last_sub:
+            message += f"• 🏁 Последняя отправка: {last_sub[:10]}\n"
         
         message += "\n"
-    else:
-        message += "**Пропущенных заданий нет!**\n\n"
     
-    if skipped_count >= 3:
-        message += f"⚠️ **Внимание:** {skipped_count} пропусков!\n"
-        if arc_id > 1:
-            message += f"   При {skipped_count} пропусках доступ может быть заблокирован.\n\n"
+    # Статистика из функции пропусков
+    if stats:
+        user_completed_days = stats.get('completed_days', 0)
+        user_skipped_days = stats.get('skipped_days', 0)
+        completion_rate = stats.get('completion_rate', 0)
+        
+        message += "📊 **СТАТИСТИКА ВЫПОЛНЕНИЯ**\n"
+        message += f"• ✅ Выполнено дней: {user_completed_days}\n"
+        message += f"• ❌ Пропущено дней: {user_skipped_days}\n"
+        message += f"• 📊 Процент выполнения: {completion_rate}%\n\n"
+        
+        # Пропущенные дни
+        skipped_list = stats.get('skipped_days_list', [])
+        if skipped_list:
+            message += "📋 **Пропущенные дни:**\n"
+            for day_title in skipped_list[:10]:
+                message += f"• {day_title}\n"
+            if len(skipped_list) > 10:
+                message += f"• ... и ещё {len(skipped_list) - 10} дней\n"
+            message += "\n"
     
-    # СОЗДАЕМ КЛАВИАТУРУ ПРАВИЛЬНО
-    if username:
-        # Если есть username, создаем inline-кнопку + reply-кнопки
-        inline_keyboard = [[InlineKeyboardButton("💬 Написать участнику", url=f"https://t.me/{username}")]]
-        inline_markup = InlineKeyboardMarkup(inline_keyboard)
+    # Детальная статистика по дням (первые 10)
+    if days_stats:
+        message += "📅 **СТАТИСТИКА ПО ДНЯМ (первые 10):**\n"
+        for day_num, day_title, total_day, completed_day in days_stats[:10]:
+            if total_day > 0:
+                day_percent = int((completed_day / total_day) * 100) if total_day > 0 else 0
+                status_icon = "✅" if completed_day == total_day else "🟡" if completed_day > 0 else "🔴"
+                message += f"• {status_icon} День {day_num}: {completed_day}/{total_day} ({day_percent}%)\n"
+        if len(days_stats) > 10:
+            message += f"• ... и ещё {len(days_stats) - 10} дней\n"
+        message += "\n"
+    
+    # Рекомендации для админа
+    message += "💡 **АНАЛИЗ ДЛЯ АДМИНА:**\n"
+    
+    if status == 'active':
+        if stats and stats.get('completion_rate', 0) < 50:
+            message += "⚠️ Участник отстаёт от графика. Рекомендуется связаться с ним.\n"
+        elif stats and stats.get('completion_rate', 0) > 80:
+            message += "✅ Участник показывает хорошие результаты.\n"
+        else:
+            message += "📊 Участник в среднем темпе выполнения.\n"
+    elif status == 'past':
+        if stats and stats.get('completion_rate', 0) > 70:
+            message += "🎉 Участник успешно завершил часть.\n"
+        else:
+            message += "📉 Участник завершил часть с низкой активностью.\n"
+    
+    # Клавиатура
+    keyboard = [
+        ["📊 Посмотреть другую часть этого участника"],
+        ["👤 Выбрать другого участника"],
+        ["🔙 Назад к проверке"]
+    ]
+    
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    
+    await update.message.reply_text(
+        message,
+        reply_markup=reply_markup,
+        parse_mode='Markdown'
+    )
+
+async def show_admin_user_statistics(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает меню выбора части для просмотра статистики пользователя (админ)"""
+    text = update.message.text
+    
+    user_mapping = context.user_data.get('admin_stats_users', {})
+    user_info = user_mapping.get(text)
+    
+    if not user_info:
+        await update.message.reply_text("❌ Пользователь не найден")
+        return
+    
+    user_id = user_info['user_id']
+    display_name = user_info['display_name']
+    
+    # Получаем части пользователя
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT DISTINCT a.arc_id, a.title, a.дата_начала, a.дата_окончания,
+               CASE 
+                   WHEN DATE('now') < a.дата_начала THEN 'future'
+                   WHEN DATE('now') > a.дата_окончания THEN 'past' 
+                   ELSE 'active'
+               END as status
+        FROM user_arc_access uaa
+        JOIN arcs a ON uaa.arc_id = a.arc_id
+        WHERE uaa.user_id = ?
+        ORDER BY a.дата_начала DESC
+    ''', (user_id,))
+    
+    user_arcs = cursor.fetchall()
+    conn.close()
+    
+    if not user_arcs:
+        await update.message.reply_text(f"❌ У пользователя {display_name} нет доступа к частям")
+        return
+    
+    # Сохраняем данные пользователя
+    context.user_data['admin_current_user'] = {
+        'user_id': user_id,
+        'display_name': display_name
+    }
+    
+    # Формируем клавиатуру
+    keyboard = []
+    arc_mapping = {}
+    
+    for arc_id, arc_title, arc_start, arc_end, status in user_arcs:
+        # Определяем эмодзи
+        if status == 'active':
+            emoji = "🔄"
+        elif status == 'future':
+            emoji = "⏳"
+        else:
+            emoji = "✅"
         
-        # Отправляем inline-кнопку отдельным сообщением
-        await update.message.reply_text(
-            message,
-            reply_markup=inline_markup,
-            parse_mode='Markdown',
-            disable_web_page_preview=True
-        )
+        btn_text = f"{emoji} {arc_title}"
+        keyboard.append([btn_text])
         
-        # Затем отправляем reply-кнопки
-        keyboard = [
-            ["📊 Прогресс участников"],
-            ["🔙 Назад к проверке"]
-        ]
-        reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-        await update.message.reply_text(
-            "Выберите действие:",
-            reply_markup=reply_markup
-        )
+        arc_mapping[btn_text] = {
+            'arc_id': arc_id,
+            'arc_title': arc_title,
+            'status': status
+        }
+    
+    keyboard.append(["👤 Выбрать другого участника"])
+    keyboard.append(["🔙 Назад к проверке"])
+    
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    
+    context.user_data['admin_user_arcs_map'] = arc_mapping
+    
+    message = f"👤 **Статистика участника:** {display_name}\n\n"
+    message += "Выберите часть для просмотра статистики:\n\n"
+    message += "**Обозначения:**\n"
+    message += "• 🔄 - часть идёт сейчас\n"
+    message += "• ⏳ - часть начнётся в будущем\n"
+    message += "• ✅ - часть завершена\n"
+    
+    await update.message.reply_text(
+        message,
+        reply_markup=reply_markup,
+        parse_mode='Markdown'
+    )
+
+
+async def show_admin_arc_statistics(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает детальную статистику пользователя по выбранной части (админ)"""
+    text = update.message.text
+    
+    # Получаем данные пользователя
+    user_info = context.user_data.get('admin_current_user')
+    if not user_info:
+        await update.message.reply_text("❌ Ошибка: пользователь не выбран")
+        return
+    
+    user_id = user_info['user_id']
+    display_name = user_info['display_name']
+    
+    # Получаем данные части
+    arc_mapping = context.user_data.get('admin_user_arcs_map', {})
+    arc_info = arc_mapping.get(text)
+    
+    if not arc_info:
+        await update.message.reply_text("❌ Часть не найдена")
+        return
+    
+    arc_id = arc_info['arc_id']
+    arc_title = arc_info['arc_title']
+    status = arc_info['status']
+    
+    from database import get_user_skip_statistics, get_current_arc_day
+    
+    # Получаем статистику пропусков
+    stats = get_user_skip_statistics(user_id, arc_id)
+    
+    # Получаем информацию о дне
+    current_day_info = None
+    if status == 'active':
+        current_day_info = get_current_arc_day(user_id, arc_id)
+    
+    # Получаем детальную статистику по заданиям
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    # Общая статистика по части
+    cursor.execute('''
+        SELECT 
+            COUNT(DISTINCT d.day_id) as total_days,
+            COUNT(DISTINCT a.assignment_id) as total_assignments
+        FROM days d
+        LEFT JOIN assignments a ON d.day_id = a.day_id
+        WHERE d.arc_id = ?
+    ''', (arc_id,))
+    
+    arc_stats = cursor.fetchone()
+    total_days = arc_stats[0] if arc_stats else 0
+    total_assignments = arc_stats[1] if arc_stats else 0
+    
+    # Статистика выполнения пользователем
+    cursor.execute('''
+        SELECT 
+            COUNT(DISTINCT CASE WHEN upa.status IN ('submitted', 'approved') THEN d.order_num END) as completed_days,
+            COUNT(CASE WHEN upa.status = 'submitted' THEN 1 END) as submitted_assignments,
+            COUNT(CASE WHEN upa.status = 'approved' THEN 1 END) as approved_assignments,
+            COUNT(CASE WHEN upa.status IS NULL THEN 1 END) as new_assignments,
+            MIN(upa.submitted_at) as first_submission,
+            MAX(upa.submitted_at) as last_submission
+        FROM days d
+        LEFT JOIN assignments a ON d.day_id = a.day_id
+        LEFT JOIN user_progress_advanced upa ON a.assignment_id = upa.assignment_id AND upa.user_id = ?
+        WHERE d.arc_id = ?
+    ''', (user_id, arc_id))
+    
+    user_stats = cursor.fetchone()
+    
+    # Статистика по дням
+    cursor.execute('''
+        SELECT d.order_num, d.title,
+               COUNT(DISTINCT a.assignment_id) as total_day_assignments,
+               COUNT(DISTINCT CASE WHEN upa.status IN ('submitted', 'approved') THEN a.assignment_id END) as completed_day_assignments
+        FROM days d
+        LEFT JOIN assignments a ON d.day_id = d.day_id
+        LEFT JOIN user_progress_advanced upa ON a.assignment_id = upa.assignment_id AND upa.user_id = ?
+        WHERE d.arc_id = ?
+        GROUP BY d.order_num, d.title
+        ORDER BY d.order_num
+    ''', (user_id, arc_id))
+    
+    days_stats = cursor.fetchall()
+    
+    conn.close()
+    
+    # Формируем сообщение
+    message = f"📊 **СТАТИСТИКА (АДМИН)**\n\n"
+    message += f"👤 **Участник:** {display_name}\n"
+    message += f"🔄 **Часть:** {arc_title}\n"
+    message += f"📊 **Статус:** {'Активна' if status == 'active' else 'Завершена' if status == 'past' else 'Будущая'}\n\n"
+    
+    if status == 'active' and current_day_info:
+        message += f"📅 **Текущий день:** {current_day_info['day_number']} из {total_days}\n\n"
+    
+    # Общая статистика части
+    message += "📈 **ОБЩАЯ СТАТИСТИКА ЧАСТИ**\n"
+    message += f"• 📅 Всего дней: {total_days}\n"
+    message += f"• 📝 Всего заданий: {total_assignments}\n\n"
+    
+    # Статистика пользователя
+    if user_stats:
+        completed_days, submitted, approved, new, first_sub, last_sub = user_stats
         
-    else:
-        # Если нет username, отправляем только reply-кнопки
-        keyboard = [
-            ["📊 Прогресс участников"],
-            ["🔙 Назад к проверке"]
-        ]
-        reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+        message += "👤 **СТАТИСТИКА УЧАСТНИКА**\n"
+        message += f"• ✅ Выполнено дней: {completed_days}/{total_days}\n"
         
-        await update.message.reply_text(
-            message,
-            reply_markup=reply_markup,
-            parse_mode='Markdown'
-        )
+        if total_assignments > 0:
+            completed_total = submitted + approved
+            completion_percent = int((completed_total / total_assignments) * 100)
+            
+            message += f"• 📝 Выполнено заданий: {completed_total}/{total_assignments} ({completion_percent}%)\n"
+            message += f"  ├ 🟡 На проверке: {submitted}\n"
+            message += f"  ├ 💬 Проверено: {approved}\n"
+            message += f"  └ 🔵 Новых: {new}\n\n"
+        
+        if first_sub:
+            message += f"• 🎯 Первая отправка: {first_sub[:10]}\n"
+        if last_sub:
+            message += f"• 🏁 Последняя отправка: {last_sub[:10]}\n"
+        
+        message += "\n"
+    
+    # Статистика из функции пропусков
+    if stats:
+        user_completed_days = stats.get('completed_days', 0)
+        user_skipped_days = stats.get('skipped_days', 0)
+        completion_rate = stats.get('completion_rate', 0)
+        
+        message += "📊 **СТАТИСТИКА ВЫПОЛНЕНИЯ**\n"
+        message += f"• ✅ Выполнено дней: {user_completed_days}\n"
+        message += f"• ❌ Пропущено дней: {user_skipped_days}\n"
+        message += f"• 📊 Процент выполнения: {completion_rate}%\n\n"
+        
+        # Пропущенные дни
+        skipped_list = stats.get('skipped_days_list', [])
+        if skipped_list:
+            message += "📋 **Пропущенные дни:**\n"
+            for day_title in skipped_list[:10]:
+                message += f"• {day_title}\n"
+            if len(skipped_list) > 10:
+                message += f"• ... и ещё {len(skipped_list) - 10} дней\n"
+            message += "\n"
+    
+    # Детальная статистика по дням (первые 10)
+    if days_stats:
+        message += "📅 **СТАТИСТИКА ПО ДНЯМ (первые 10):**\n"
+        for day_num, day_title, total_day, completed_day in days_stats[:10]:
+            if total_day > 0:
+                day_percent = int((completed_day / total_day) * 100) if total_day > 0 else 0
+                status_icon = "✅" if completed_day == total_day else "🟡" if completed_day > 0 else "🔴"
+                message += f"• {status_icon} День {day_num}: {completed_day}/{total_day} ({day_percent}%)\n"
+        if len(days_stats) > 10:
+            message += f"• ... и ещё {len(days_stats) - 10} дней\n"
+        message += "\n"
+    
+    # Рекомендации для админа
+    message += "💡 **АНАЛИЗ ДЛЯ АДМИНА:**\n"
+    
+    if status == 'active':
+        if stats and stats.get('completion_rate', 0) < 50:
+            message += "⚠️ Участник отстаёт от графика. Рекомендуется связаться с ним.\n"
+        elif stats and stats.get('completion_rate', 0) > 80:
+            message += "✅ Участник показывает хорошие результаты.\n"
+        else:
+            message += "📊 Участник в среднем темпе выполнения.\n"
+    elif status == 'past':
+        if stats and stats.get('completion_rate', 0) > 70:
+            message += "🎉 Участник успешно завершил часть.\n"
+        else:
+            message += "📉 Участник завершил часть с низкой активностью.\n"
+    
+    # Клавиатура
+    keyboard = [
+        ["📊 Посмотреть другую часть этого участника"],
+        ["👤 Выбрать другого участника"],
+        ["🔙 Назад к проверке"]
+    ]
+    
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    
+    await update.message.reply_text(
+        message,
+        reply_markup=reply_markup,
+        parse_mode='Markdown'
+    )
 
 def has_any_access(user_id):
     """Проверяет есть ли у пользователя доступ к любому разделу"""
@@ -4582,6 +5112,31 @@ async def send_scheduled_notifications(context: ContextTypes.DEFAULT_TYPE):
                 continue
             
             for arc_id, arc_title, arc_start in user_arcs:
+
+                # ПРОВЕРКА: arc_start может быть None!
+                if not arc_start:
+                    print(f"   ⚠️ У части {arc_title} нет даты начала, пропускаем")
+                    continue
+                
+                # ПРЕОБРАЗОВАНИЕ ДАТЫ С ПРОВЕРКОЙ
+                try:
+                    if isinstance(arc_start, str):
+                        arc_start_date = datetime.fromisoformat(arc_start).date()
+                    else:
+                        arc_start_date = arc_start
+                    
+                    # ДОПОЛНИТЕЛЬНАЯ ПРОВЕРКА
+                    if arc_start_date is None:
+                        print(f"   ⚠️ Не удалось получить дату начала для {arc_title}")
+                        continue
+                        
+                except Exception as e:
+                    print(f"   ⚠️ Ошибка преобразования даты {arc_start}: {e}")
+                    continue
+                
+                # ТЕПЕРЬ МОЖНО БЕЗОПАСНО СРАВНИВАТЬ
+                if user_time.date() < arc_start_date:
+                    continue
                 
                 if isinstance(arc_start, str):
                     arc_start_date = datetime.fromisoformat(arc_start).date()
@@ -5177,79 +5732,53 @@ async def show_assignment_from_list(update: Update, context: ContextTypes.DEFAUL
     # Сохраняем данные (ВАЖНО: arc_id!)
     context.user_data['current_assignment'] = assignment_info['title']
     context.user_data['current_assignment_id'] = assignment_id
-    context.user_data['current_arc_id'] = arc_id  # ← СОХРАНЯЕМ!
+    context.user_data['current_arc_id'] = arc_id
     
-    # Получаем day_id
+    # Получаем day_id из базы данных
     conn = sqlite3.connect('mentor_bot.db')
     cursor = conn.cursor()
-    cursor.execute('SELECT day_id FROM assignments WHERE assignment_id = ?', (assignment_id,))
-    result = cursor.fetchone()
     
-    if result:
-        context.user_data['current_day_id'] = result[0]
-    
-    conn.close()
-    
-    if not day_id:
-        await update.message.reply_text("❌ Ошибка: день задания не найден")
-        return
-    
-    from database import check_assignment_status
-    status = check_assignment_status(user_id, assignment_id)
-    
-    if status == 'submitted':
-        await update.message.reply_text(
-            "🟡 **Это задание уже на проверке!**\n\n"
-            "Ждите ответа психолога в разделе 'Ответ психолога'.",
-            parse_mode='Markdown'
-        )
-        return
-    
-    if status == 'approved':
-        await update.message.reply_text(
-            "✅ **Это задание уже проверено!**\n\n"
-            "Ответ психолога доступен в разделе 'Ответ психолога'.",
-            parse_mode='Markdown'
-        )
-        return
-    
-    context.user_data['current_assignment'] = assignment_title
-    context.user_data['current_assignment_id'] = assignment_id
-    context.user_data['current_day_id'] = day_id
-    context.user_data['current_arc_id'] = assignment_info['arc_id']
-    context.user_data['current_arc_title'] = assignment_info['arc_title']
-    context.user_data['answering'] = True
-    context.user_data['answer_text'] = None
-    context.user_data['answer_files'] = []
-    context.user_data['questions'] = []
-    
-    conn = sqlite3.connect('mentor_bot.db')
-    cursor = conn.cursor()
+    # Исправленный запрос: получаем day_id и другую информацию
     cursor.execute('''
-        SELECT content_text, доступно_до
+        SELECT day_id, content_text, доступно_до, title 
         FROM assignments 
         WHERE assignment_id = ?
     ''', (assignment_id,))
+    
     result = cursor.fetchone()
     conn.close()
     
-    content_text, available_until = result if result else (None, '22:00')
+    if not result:
+        await update.message.reply_text("❌ Ошибка: задание не найдено в базе")
+        return
     
+    day_id, content_text, available_until, assignment_title = result
+    
+    # Сохраняем day_id
+    context.user_data['current_day_id'] = day_id
+    
+    # Показываем заголовок задания
     header = f"**📝 {assignment_title}**\n\n"
     if available_until and available_until != '22:00':
-        header += f"⏰ **Выполняя задание дня до:** {available_until}, вы сохраняете серию выполнений подряд\n\n"
+        header += f"⏰ **Выполните задание до 0:00, иначе оно засчитается пропущенным\n\n"
 
     await update.message.reply_text(header, parse_mode='Markdown')
 
+    # Показываем текст задания (используем send_long_message для длинных текстов)
     if content_text:
-        # ИСПРАВЛЕНИЕ ЗДЕСЬ: используем send_long_message вместо обрезки
         await send_long_message(
             update, 
             content_text, 
             prefix="📋 **Задание:**",
             parse_mode='Markdown'
         )
+    else:
+        await update.message.reply_text(
+            "📋 **Задание:**\n\nТекст задания отсутствует.",
+            parse_mode='Markdown'
+        )
 
+    # Показываем варианты ответа
     choice_message = "**📤 Выберите вариант ответа:**"
 
     keyboard = [
@@ -5265,6 +5794,12 @@ async def show_assignment_from_list(update: Update, context: ContextTypes.DEFAUL
         reply_markup=reply_markup,
         parse_mode='Markdown'
     )
+    
+    # Устанавливаем флаг что пользователь отвечает
+    context.user_data['answering'] = True
+    context.user_data['answer_text'] = None
+    context.user_data['answer_files'] = []
+    context.user_data['questions'] = []
 
 async def show_in_progress_assignments(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показывает задания на проверке"""

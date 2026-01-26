@@ -410,3 +410,140 @@ Traceback (most recent call last):
 NameError: name 'current_arc' is not defined. Did you mean: 'get_current_arc'?
 2026-01-25 19:08:28,522 - bot - INFO - === Бот запущен с логированием платежей ===
 2026-01-25 19:14:36,098 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-01-25 19:14:46,758 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-01-25 21:27:44,177 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-01-25 21:27:54,845 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-01-25 21:28:19,422 - __main__ - INFO - 🔍 show_service_offer_agreement: сохраняем arc '🔄 Марафон |старт 22.01.25' для user 918928334
+2026-01-25 21:29:18,458 - __main__ - ERROR - Exception while handling an update: '<=' not supported between instances of 'NoneType' and 'datetime.date'
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\marafon_bot\bot.py", line 349, in handle_buttons
+    await unique_buttons[text](update, context)
+  File "C:\Users\САШАДАША\Desktop\marafon_bot\bot.py", line 2819, in show_course_main
+    if start_date <= today <= end_date:
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '<=' not supported between instances of 'NoneType' and 'datetime.date'
+2026-01-25 21:31:55,977 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-01-25 21:32:06,645 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-01-25 21:33:14,666 - __main__ - ERROR - Exception while handling an update: '<=' not supported between instances of 'NoneType' and 'datetime.date'
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\marafon_bot\bot.py", line 348, in handle_buttons
+    await unique_buttons[text](update, context)
+  File "C:\Users\САШАДАША\Desktop\marafon_bot\bot.py", line 2827, in show_course_main
+    if start_date <= today <= end_date:
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '<=' not supported between instances of 'NoneType' and 'datetime.date'
+2026-01-25 21:37:54,747 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-01-25 21:38:05,434 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-01-25 21:45:07,266 - apscheduler.executors.default - WARNING - Run time of job "send_scheduled_notifications (trigger: interval[0:01:00], next run at: 2026-01-25 16:46:05 UTC)" was missed by 0:00:01.987780
+2026-01-25 22:03:21,057 - __main__ - ERROR - Exception while handling an update: name 'day_id' is not defined
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\marafon_bot\bot.py", line 465, in handle_buttons
+    await show_assignment_from_list(update, context)
+  File "C:\Users\САШАДАША\Desktop\marafon_bot\bot.py", line 5318, in show_assignment_from_list
+    if not day_id:
+           ^^^^^^
+NameError: name 'day_id' is not defined
+2026-01-25 22:09:36,120 - __main__ - ERROR - Exception while handling an update: name 'day_id' is not defined
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\marafon_bot\bot.py", line 465, in handle_buttons
+    await show_assignment_from_list(update, context)
+  File "C:\Users\САШАДАША\Desktop\marafon_bot\bot.py", line 5318, in show_assignment_from_list
+    if not day_id:
+           ^^^^^^
+NameError: name 'day_id' is not defined
+2026-01-25 22:19:43,323 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-01-25 22:19:53,990 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-01-25 22:20:38,645 - __main__ - ERROR - Exception while handling an update: '<=' not supported between instances of 'NoneType' and 'datetime.date'
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\marafon_bot\bot.py", line 392, in handle_buttons
+    await unique_buttons[text](update, context)
+  File "C:\Users\САШАДАША\Desktop\marafon_bot\bot.py", line 2862, in show_course_main
+    if start_date <= today <= end_date:
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '<=' not supported between instances of 'NoneType' and 'datetime.date'
+2026-01-25 22:20:45,588 - __main__ - ERROR - Exception while handling an update: '<=' not supported between instances of 'NoneType' and 'datetime.date'
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\marafon_bot\bot.py", line 392, in handle_buttons
+    await unique_buttons[text](update, context)
+  File "C:\Users\САШАДАША\Desktop\marafon_bot\bot.py", line 2862, in show_course_main
+    if start_date <= today <= end_date:
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '<=' not supported between instances of 'NoneType' and 'datetime.date'
+2026-01-25 22:26:52,122 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-01-25 22:27:02,660 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-01-25 22:37:18,624 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-01-25 22:37:29,297 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-01-25 22:39:00,414 - __main__ - ERROR - Exception while handling an update: '<=' not supported between instances of 'NoneType' and 'datetime.date'
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\marafon_bot\bot.py", line 392, in handle_buttons
+    await unique_buttons[text](update, context)
+  File "C:\Users\САШАДАША\Desktop\marafon_bot\bot.py", line 2865, in show_course_main
+    if start_date <= today <= end_date:
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '<=' not supported between instances of 'NoneType' and 'datetime.date'
+2026-01-25 22:44:59,090 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-01-25 22:45:09,614 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-01-25 22:49:10,472 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-01-25 22:49:21,160 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-01-25 23:15:52,568 - __main__ - ERROR - Exception while handling an update: name 'day_id' is not defined
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\marafon_bot\bot.py", line 495, in handle_buttons
+    await show_assignment_from_list(update, context)
+  File "C:\Users\САШАДАША\Desktop\marafon_bot\bot.py", line 5748, in show_assignment_from_list
+    if not day_id:
+           ^^^^^^
+NameError: name 'day_id' is not defined
+2026-01-25 23:16:25,648 - __main__ - ERROR - Exception while handling an update: name 'day_id' is not defined
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\marafon_bot\bot.py", line 495, in handle_buttons
+    await show_assignment_from_list(update, context)
+  File "C:\Users\САШАДАША\Desktop\marafon_bot\bot.py", line 5748, in show_assignment_from_list
+    if not day_id:
+           ^^^^^^
+NameError: name 'day_id' is not defined
+2026-01-25 23:19:09,041 - __main__ - INFO - === Бот запущен с логированием платежей ===

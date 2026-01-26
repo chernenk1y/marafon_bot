@@ -1553,77 +1553,71 @@ def get_current_arc_day(user_id, arc_id):
     conn = sqlite3.connect('mentor_bot.db')
     cursor = conn.cursor()
     
-    # 1. Получаем дату начала дуги из таблицы arcs
-    cursor.execute("PRAGMA table_info(arcs)")
-    columns = [col[1] for col in cursor.fetchall()]
+    # 1. Получаем дату начала дуги
+    cursor.execute('SELECT дата_начала FROM arcs WHERE arc_id = ?', (arc_id,))
+    result = cursor.fetchone()
     
-    # Ищем колонку с датой начала
-    date_cols = ['дата_начала', 'date_start', 'start_date']
-    start_col = next((col for col in date_cols if col in columns), None)
-    
-    if not start_col:
-        # Fallback - используем purchased_at
-        cursor.execute('SELECT purchased_at FROM user_arc_access WHERE user_id = ? AND arc_id = ?', 
-                      (user_id, arc_id))
-        result = cursor.fetchone()
-        if result:
-            arc_start_date = datetime.fromisoformat(result[0]).date()
-        else:
-            conn.close()
-            return None
-    else:
-        # Берем дату начала из arcs
-        cursor.execute(f'SELECT {start_col} FROM arcs WHERE arc_id = ?', (arc_id,))
-        result = cursor.fetchone()
-        if result:
-            arc_start_date = result[0]
-            if isinstance(arc_start_date, str):
-                arc_start_date = datetime.fromisoformat(arc_start_date).date()
-        else:
-            conn.close()
-            return None
-    
-    # 2. Получаем местное время пользователя
-    user_time = get_user_local_time(user_id)
-    
-    # 3. Вычисляем текущий день дуги
-    # Если дуга еще не началась - день 0
-    # Преобразуем arc_start_date в date если это datetime
-    if isinstance(arc_start_date, datetime):
-        arc_start_date_only = arc_start_date.date()
-    elif isinstance(arc_start_date, str):
-        # Если строка вида "2025-11-29"
-        arc_start_date_only = datetime.fromisoformat(arc_start_date).date()
-    else:
-        arc_start_date_only = arc_start_date
-
-    user_date = user_time.date()
-
-    # Всегда добавляем +1, если дата >= дате начала
-    days_diff = (user_date - arc_start_date_only).days
-    if days_diff < 0:
-        current_day = 0
-    else:
-        current_day = days_diff + 1
-
-    print(f"📅 Расчет: {user_date} - {arc_start_date_only} = {days_diff} дней, день {current_day}")
-    
-    # Ограничиваем 40 днями
-    current_day = min(max(current_day, 0), 40)
-    
-    print(f"🔍 DEBUG get_current_arc_day: arc_start_date={arc_start_date}, user_date={user_time.date()}, current_day={current_day}") 
-    print(f"🔍 DEBUG: arc_start_date={arc_start_date}, user_date={user_time.date()}, current_day={current_day}")
-    
-    # Если день 0 - дуга еще не началась
-    if current_day == 0:
+    if not result or not result[0]:
         conn.close()
         return {
             'day_id': None,
-            'day_title': f"Дуга начнется {arc_start_date}",
+            'day_title': f"Ошибка: дата начала не указана",
             'day_number': 0,
-            'total_days': 40,
-            'arc_start_date': arc_start_date
+            'total_days': 28,
+            'arc_start_date': None
         }
+    
+    arc_start_date_str = result[0]
+    
+    # Преобразуем строку в дату
+    try:
+        if isinstance(arc_start_date_str, str):
+            # Очищаем строку
+            arc_start_date_str = arc_start_date_str.strip()
+            if not arc_start_date_str:
+                conn.close()
+                return {
+                    'day_id': None,
+                    'day_title': f"Ошибка: пустая дата начала",
+                    'day_number': 0,
+                    'total_days': 28,
+                    'arc_start_date': None
+                }
+            
+            # Парсим дату
+            if ' ' in arc_start_date_str:
+                # ИСПРАВЛЕНИЕ: используем datetime, а не datetime.datetime
+                arc_start_date = datetime.strptime(arc_start_date_str, '%Y-%m-%d %H:%M:%S').date()
+            else:
+                arc_start_date = datetime.strptime(arc_start_date_str, '%Y-%m-%d').date()
+        else:
+            # Уже datetime/date объект
+            arc_start_date = arc_start_date_str
+            if hasattr(arc_start_date, 'date'):
+                arc_start_date = arc_start_date.date()
+    except Exception as e:
+        print(f"🚨 Ошибка парсинга даты '{arc_start_date_str}': {e}")
+        conn.close()
+        return {
+            'day_id': None,
+            'day_title': f"Ошибка формата даты",
+            'day_number': 0,
+            'total_days': 28,
+            'arc_start_date': None
+        }
+    
+    # 2. Получаем местное время пользователя
+    user_time = get_user_local_time(user_id)
+    user_date = user_time.date()
+    
+    # 3. Вычисляем текущий день дуги
+    if user_date < arc_start_date:
+        current_day = 0
+    else:
+        current_day = (user_date - arc_start_date).days + 1
+    
+    # Ограничиваем максимальным количеством дней
+    current_day = min(max(current_day, 0), 28)
     
     # 4. Находим день в базе
     cursor.execute('''
@@ -1632,31 +1626,24 @@ def get_current_arc_day(user_id, arc_id):
     ''', (arc_id, current_day))
     
     day_info = cursor.fetchone()
-    print(f"🔍 DEBUG: Запрос дня: arc_id={arc_id}, current_day={current_day}")
-    print(f"🔍 DEBUG: Результат запроса: {day_info}")
-
     conn.close()
-
+    
     if day_info:
         day_id, day_title = day_info
-        print(f"✅ День найден: id={day_id}, title='{day_title}'")
         return {
             'day_id': day_id,
             'day_title': day_title,
             'day_number': current_day,
-            'total_days': 40,
+            'total_days': 28,
             'arc_start_date': arc_start_date
         }
-    else:
-        print(f"❌ День НЕ найден! arc_id={arc_id}, order_num={current_day}")
-        print(f"   Проверь таблицу days: есть ли запись с arc_id={arc_id} и order_num={current_day}?")
     
-    # Если дня нет в базе (например, день > 40)
+    # Если дня нет в базе
     return {
         'day_id': None,
         'day_title': f"День {current_day}",
         'day_number': current_day,
-        'total_days': 40,
+        'total_days': 28,
         'arc_start_date': arc_start_date
     }
 
@@ -1923,7 +1910,7 @@ def reload_full_from_excel():
         return False
 
 def get_user_skip_statistics(user_id, arc_id):
-    """Статистика по ЗАДАНИЯМ с определением пропущенных"""
+    """Статистика - используем дату первого ответа как дату начала"""
     conn = sqlite3.connect('mentor_bot.db')
     cursor = conn.cursor()
     
@@ -1933,13 +1920,35 @@ def get_user_skip_statistics(user_id, arc_id):
     
     if not arc_start_result or not arc_start_result[0]:
         conn.close()
-        return {'total_assignments': 0, 'completed_assignments': 0, 
-                'submitted_assignments': 0, 'completion_rate': 0,
-                'skipped_assignments': 0, 'skipped_list': []}
+        return {'total_days': 0, 'completed_days': 0, 'skipped_days': 0, 
+                'streak_days': 0, 'user_start_date': None, 'completion_rate': 0}
     
-    arc_start_date = arc_start_result[0]
-    if isinstance(arc_start_date, str):
-        arc_start_date = datetime.fromisoformat(arc_start_date).date()
+    arc_start_date_str = arc_start_result[0]
+    
+    # Преобразуем в дату
+    try:
+        if isinstance(arc_start_date_str, str):
+            arc_start_date_str = arc_start_date_str.strip()
+            if not arc_start_date_str:
+                conn.close()
+                return {'total_days': 0, 'completed_days': 0, 'skipped_days': 0, 
+                        'streak_days': 0, 'user_start_date': None, 'completion_rate': 0}
+            
+            if ' ' in arc_start_date_str:
+                # ИСПРАВЛЕНИЕ: используем datetime, а не datetime.datetime
+                arc_start_date = datetime.strptime(arc_start_date_str, '%Y-%m-%d %H:%M:%S').date()
+            else:
+                arc_start_date = datetime.strptime(arc_start_date_str, '%Y-%m-%d').date()
+        else:
+            arc_start_date = arc_start_date_str
+            if hasattr(arc_start_date, 'date'):
+                arc_start_date = arc_start_date.date()
+    except Exception as e:
+        print(f"🚨 Ошибка парсинга даты в статистике: {e}")
+        conn.close()
+        return {'total_days': 0, 'completed_days': 0, 'skipped_days': 0, 
+                'streak_days': 0, 'user_start_date': None, 'completion_rate': 0}
+    
     
     # 2. Находим дату первого ответа или доступа
     cursor.execute('''
