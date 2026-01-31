@@ -2674,6 +2674,55 @@ async def show_approved_assignment_simple(update: Update, context: ContextTypes.
             prefix="**📝 Задание:**",
             parse_mode='Markdown'
         )
+
+    # ★★ ДОБАВИТЬ ЗДЕСЬ - показ медиа задания
+    # Получаем медиа-контент задания
+    from database import get_assignment_media
+    media_data = get_assignment_media(assignment_id)
+
+    # 1. Фото задания
+    if media_data and media_data.get('photos'):
+        photos = media_data['photos']
+        if isinstance(photos, list) and photos:
+            for i, photo_id in enumerate(photos[:5], 1):
+                try:
+                    await update.message.reply_photo(
+                        photo=photo_id,
+                        caption=f"🖼️ Фото {i} к заданию"
+                    )
+                except Exception as e:
+                    print(f"🚨 Ошибка отправки фото {i}: {e}")
+
+    # 2. Аудио задания
+    if media_data and media_data.get('audios'):
+        audios = media_data['audios']
+        if isinstance(audios, list) and audios:
+            for i, audio_id in enumerate(audios[:3], 1):
+                try:
+                    await update.message.reply_audio(
+                        audio=audio_id,
+                        caption=f"🎵 Аудио {i} к заданию"
+                    )
+                except Exception as e:
+                    print(f"🚨 Ошибка отправки аудио {i}: {e}")
+
+    # 3. Видео задания
+    if media_data and media_data.get('video_url'):
+        video_url = media_data['video_url']
+        if video_url and video_url.strip():
+            if 'youtube.com' in video_url or 'youtu.be' in video_url:
+                await update.message.reply_text(f"🎬 Видео к заданию:\n{video_url}")
+            elif video_url.startswith(('BAACAgI', 'CgACAgI', 'BAACAgQ', 'AgACAgI')):
+                try:
+                    await update.message.reply_video(
+                        video=video_url,
+                        caption="🎬 Видео к заданию"
+                    )
+                except Exception as e:
+                    print(f"🚨 Ошибка отправки видео: {e}")
+                    await update.message.reply_text("🎬 Видео к заданию")
+            else:
+                await update.message.reply_text(f"🎬 Видео к заданию:\n{video_url}")
     
     # 2. Отправляем ответ участника (если есть)
     if answer_text:
@@ -2718,6 +2767,8 @@ async def show_approved_assignment_simple(update: Update, context: ContextTypes.
                         print(f"🚨 Ошибка отправки файла {i}: {doc_error}")
         except Exception as e:
             print(f"🚨 Ошибка загрузки файлов: {e}")
+
+    
     
     # 5. Итоговое сообщение
     keyboard = [["🔙 Назад к списку участников"]]
@@ -3532,7 +3583,7 @@ async def show_arc_statistics(update: Update, context: ContextTypes.DEFAULT_TYPE
         completion_rate = stats.get('completion_rate', 0)
 
         message += "**Статистика заданий:**\n"
-        message += f"• **Всего:** 28 заданий\n"
+        message += f"• **Всего:** 28 дней и 84 задания\n"
         message += f"• **Выполнено:** {completed_assignments}\n"
         message += f"• Процент выполнения: {completion_rate}%\n"
 
@@ -6266,6 +6317,54 @@ async def show_feedback_assignment_detail(update: Update, context: ContextTypes.
         full_message += f"💬 Ответ психолога:\n{teacher_comment}\n\n"
     
     full_message += f"📅 Отправлено: {submitted_at[:10] if submitted_at else 'Не указано'}"
+
+    from database import get_assignment_media
+    media_data = get_assignment_media(assignment_id)
+
+    # 2. Фото (если есть и не пустой список)
+    if media_data and media_data.get('photos'):
+        photos = media_data['photos']
+        if isinstance(photos, list) and photos:
+            for i, photo_id in enumerate(photos[:5], 1):
+                try:
+                    await update.message.reply_photo(
+                        photo=photo_id,
+                        caption=f"🖼️ Фото {i} к заданию"
+                    )
+                except Exception as e:
+                    print(f"🚨 Ошибка отправки фото {i}: {e}")
+
+    # 3. Аудио (если есть и не пустой список)
+    if media_data and media_data.get('audios'):
+        audios = media_data['audios']
+        if isinstance(audios, list) and audios:
+            for i, audio_id in enumerate(audios[:3], 1):
+                try:
+                    await update.message.reply_audio(
+                        audio=audio_id,
+                        caption=f"🎵 Аудио {i} к заданию"
+                    )
+                except Exception as e:
+                    print(f"🚨 Ошибка отправки аудио {i}: {e}")
+
+    # 4. Видео (ссылка, если есть и не пустая)
+    if media_data and media_data.get('video_url'):
+        video_url = media_data['video_url']
+        if video_url and video_url.strip():
+            # ПРОСТОЙ ТЕКСТ БЕЗ MARKDOWN
+            if 'youtube.com' in video_url or 'youtu.be' in video_url:
+                await update.message.reply_text(f"🎬 Видео к заданию:\n{video_url}")
+            elif video_url.startswith(('BAACAgI', 'CgACAgI', 'BAACAgQ', 'AgACAgI')):
+                try:
+                    await update.message.reply_video(
+                        video=video_url,
+                        caption="🎬 Видео к заданию"  # Простой текст
+                    )
+                except Exception as e:
+                    print(f"🚨 Ошибка отправки видео: {e}")
+                    await update.message.reply_text("🎬 Видео к заданию")
+            else:
+                await update.message.reply_text(f"🎬 Видео к заданию:\n{video_url}")
     
     # СОХРАНЯЕМ ДАННЫЕ ДЛЯ КОНСУЛЬТАЦИИ
     context.user_data['current_feedback_data'] = {

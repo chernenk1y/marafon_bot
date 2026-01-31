@@ -2738,3 +2738,24 @@ TypeError: show_test_result_details() takes 7 positional arguments but 8 were gi
 2026-01-31 14:34:14,696 - bot - INFO - === Бот запущен с логированием платежей ===
 2026-01-31 14:38:21,780 - __main__ - INFO - === Бот запущен с логированием платежей ===
 2026-01-31 14:38:29,044 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-01-31 14:56:50,705 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-01-31 14:57:01,432 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-01-31 14:57:11,265 - __main__ - ERROR - Exception while handling an update: name 'media_data' is not defined
+Traceback (most recent call last):
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\САШАДАША\AppData\Local\Programs\Python\Python314\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\САШАДАША\Desktop\marafon_bot\bot.py", line 547, in handle_buttons
+    await show_feedback_assignment_detail(update, context)
+  File "C:\Users\САШАДАША\Desktop\marafon_bot\bot.py", line 6271, in show_feedback_assignment_detail
+    if media_data and media_data.get('photos'):
+       ^^^^^^^^^^
+NameError: name 'media_data' is not defined. Did you mean: 'verify_data'?
+2026-01-31 14:59:28,516 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-01-31 14:59:33,458 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-01-31 15:20:27,828 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-01-31 15:20:38,557 - bot - INFO - === Бот запущен с логированием платежей ===
+2026-01-31 15:22:28,095 - __main__ - INFO - === Бот запущен с логированием платежей ===
+2026-01-31 15:22:37,164 - bot - INFO - === Бот запущен с логированием платежей ===
