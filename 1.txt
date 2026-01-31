@@ -1,0 +1,26 @@
+# check_tests_db.py
+import sqlite3
+
+conn = sqlite3.connect('mentor_bot.db')
+cursor = conn.cursor()
+
+# 1. Проверяем таблицу tests
+print("🔍 Проверяем таблицу tests:")
+cursor.execute("PRAGMA table_info(tests)")
+columns = cursor.fetchall()
+for col in columns:
+    print(f"  {col[1]} ({col[2]})")
+
+# 2. Проверяем сколько записей
+cursor.execute("SELECT COUNT(*) FROM tests")
+count = cursor.fetchone()[0]
+print(f"\n📊 Записей в таблице tests: {count}")
+
+# 3. Проверяем первые записи
+if count > 0:
+    cursor.execute("SELECT test_id, week_num, question_text FROM tests LIMIT 3")
+    print("\n📝 Первые 3 записи:")
+    for row in cursor.fetchall():
+        print(f"  ID: {row[0]}, Неделя: {row[1]}, Вопрос: {row[2][:50]}...")
+
+conn.close()

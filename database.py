@@ -245,6 +245,9 @@ def init_db():
             day_id INTEGER,
             content_text TEXT,
             content_files TEXT,
+            content_photos TEXT,
+            content_audios TEXT,
+            video_url TEXT,
             FOREIGN KEY (course_id) REFERENCES courses (course_id),
             FOREIGN KEY (day_id) REFERENCES days (day_id)
         )
@@ -285,6 +288,7 @@ def init_db():
         cursor.execute('ALTER TABLE users ADD COLUMN is_blocked INTEGER DEFAULT 0')
     except sqlite3.OperationalError:
         pass
+
     
     # ★★★ НОВЫЕ ТАБЛИЦЫ СТРУКТУРЫ КУРСОВ ★★★
     # УДАЛИЛИ ДУБЛИРОВАННЫЙ CREATE TABLE arcs (уже создана выше)
@@ -394,6 +398,55 @@ def init_db():
         cursor.execute('ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT 0')
     except sqlite3.OperationalError:
         pass
+
+    # ★ НОВОЕ: Таблица тестов
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS tests (
+            test_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            week_num INTEGER NOT NULL, -- 1, 2, 3, 4
+            question_text TEXT NOT NULL,
+            option1 TEXT,
+            option2 TEXT,
+            option3 TEXT,
+            option4 TEXT,
+            option5 TEXT,
+            correct_option TEXT NOT NULL, -- 'option1', 'option2', etc.
+            explanation TEXT,
+            UNIQUE(week_num, question_text)
+        )
+    ''')
+    
+    # ★ НОВОЕ: Таблица результатов тестов
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS test_results (
+            result_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            arc_id INTEGER NOT NULL,
+            week_num INTEGER NOT NULL,
+            score INTEGER, -- % правильных ответов
+            answers_json TEXT NOT NULL, -- JSON: {question_id: {'selected': 'option1', 'correct': true/false}}
+            completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(user_id),
+            FOREIGN KEY (arc_id) REFERENCES arcs(arc_id),
+            UNIQUE(user_id, arc_id, week_num) -- один тест на пользователя
+        )
+    ''')
+    
+    # ★ НОВОЕ: Таблица прогресса теста (если прервали)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS test_progress (
+            progress_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            arc_id INTEGER NOT NULL,
+            week_num INTEGER NOT NULL,
+            current_question INTEGER DEFAULT 1,
+            answers_json TEXT, -- JSON с уже данными ответами
+            started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(user_id),
+            FOREIGN KEY (arc_id) REFERENCES arcs(arc_id),
+            UNIQUE(user_id, arc_id, week_num)
+        )
+    ''')
     
     conn.commit()
     conn.close()
@@ -961,7 +1014,7 @@ def add_test_access(user_id):
 
 
 def load_courses_from_excel():
-    """Загружает данные курсов из Excel файла - ПОЛНАЯ ВЕРСИЯ"""
+    """Загружает данные курсов из Excel файла - ПОЛНАЯ ВЕРСИЯ с поддержкой медиа"""
     print("📥 Загружаем данные из Excel...")
     
     try:
@@ -1039,7 +1092,7 @@ def load_courses_from_excel():
         except Exception as e:
             print(f"❌ Ошибка загрузки дней: {e}")
         
-        # 5. ★★★ ЗАГРУЖАЕМ ЗАДАНИЯ ★★★
+        # 5. ★★★ ЗАГРУЖАЕМ ЗАДАНИЯ с МЕДИА ★★★
         try:
             df_assignments = pd.read_excel(excel_file, sheet_name='Задания')
             print(f"📝 Найдено заданий: {len(df_assignments)}")
@@ -1047,31 +1100,74 @@ def load_courses_from_excel():
             assignments_loaded = 0
             for _, row in df_assignments.iterrows():
                 try:
+                    # ★ ОБНОВЛЕННОЕ: Теперь с медиа-полями ★
+                    # Получаем медиа данные (могут быть пустыми)
+                    content_photos = None
+                    content_audios = None
+                    video_url = None
+                    
+                    # Обрабатываем фото (JSON массив или строка)
+                    if 'фото' in row and pd.notna(row['фото']) and row['фото']:
+                        photos_str = str(row['фото']).strip()
+                        if photos_str and photos_str != 'nan':
+                            try:
+                                # Пробуем разобрать как JSON
+                                photos_data = json.loads(photos_str)
+                                content_photos = json.dumps(photos_data)
+                            except:
+                                # Если не JSON, создаем массив из строки
+                                content_photos = json.dumps([photos_str])
+                    
+                    # Обрабатываем аудио (JSON массив или строка)
+                    if 'аудио' in row and pd.notna(row['аудио']) and row['аудио']:
+                        audios_str = str(row['аудио']).strip()
+                        if audios_str and audios_str != 'nan':
+                            try:
+                                audios_data = json.loads(audios_str)
+                                content_audios = json.dumps(audios_data)
+                            except:
+                                content_audios = json.dumps([audios_str])
+                    
+                    # Обрабатываем видео ссылку
+                    if 'видео_ссылка' in row and pd.notna(row['видео_ссылка']) and row['видео_ссылка']:
+                        video_str = str(row['видео_ссылка']).strip()
+                        if video_str and video_str != 'nan':
+                            video_url = video_str
+                    
                     cursor.execute('''
                         INSERT INTO assignments 
-                        (assignment_id, day_id, title, content_text, доступно_до, тип)
-                        VALUES (?, ?, ?, ?, ?, ?)
+                        (assignment_id, day_id, title, content_text, доступно_до, тип,
+                         content_photos, content_audios, video_url)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ''', (
                         row['id'],
                         row['id_дня'],
                         row['название'],
                         row['текст_задания'],
                         row['доступно_до'],
-                        row['тип']
+                        row['тип'],
+                        content_photos,  # ★ НОВОЕ
+                        content_audios,  # ★ НОВОЕ
+                        video_url        # ★ НОВОЕ
                     ))
                     assignments_loaded += 1
+                    
                 except Exception as e:
                     print(f"⚠️ Ошибка загрузки задания {row['id']}: {e}")
+                    import traceback
+                    traceback.print_exc()
             
-            print(f"✅ Загружено {assignments_loaded} заданий")
+            print(f"✅ Загружено {assignments_loaded} заданий (с медиа-контентом)")
             
         except Exception as e:
             print(f"❌ Ошибка загрузки заданий: {e}")
+            import traceback
+            traceback.print_exc()
         
         conn.commit()
         conn.close()
         
-        print("🎉 Загрузка из Excel завершена!")
+        print("🎉 Загрузка из Excel завершена! (включая медиа-контент)")
         
     except Exception as e:
         print(f"❌ Критическая ошибка загрузки из Excel: {e}")
@@ -2605,79 +2701,28 @@ def check_if_can_buy_arc(user_id, arc_id):
         conn.close()
 
 def grant_trial_access(user_id, arc_id):
-    """УПРОЩЕННАЯ: выдает пробный доступ - одна транзакция, минимум операций"""
-    import logging
-    import time
-    logger = logging.getLogger(__name__)
+    """Выдает БЕСПЛАТНЫЙ пробный доступ на 3 дня (первые 3 задания)"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
     
-    logger.info(f"⚡ Упрощенная выдача доступа: user={user_id}, arc={arc_id}")
-    
-    # Попытки с паузами
-    for attempt in range(5):
-        try:
-            # Подключаемся с таймаутом и отключаем журналирование для скорости
-            conn = sqlite3.connect('mentor_bot.db', timeout=30, isolation_level=None)
-            cursor = conn.cursor()
-            
-            # ВКЛЮЧАЕМ WAL режим для лучшей параллельности
-            cursor.execute('PRAGMA journal_mode=WAL')
-            cursor.execute('PRAGMA synchronous=NORMAL')
-            
-            # ВСЁ в одной транзакции
-            cursor.execute('BEGIN IMMEDIATE')
-            
-            # 1. Просто добавляем доступ (без проверок)
-            cursor.execute('''
-                INSERT OR REPLACE INTO user_arc_access (user_id, arc_id, access_type)
-                VALUES (?, ?, 'trial')
-            ''', (user_id, arc_id))
-            
-            # 2. Таблица trial_assignments_access - только если очень нужно
-            try:
-                cursor.execute('''
-                    INSERT OR REPLACE INTO trial_assignments_access 
-                    (user_id, arc_id, max_assignment_order)
-                    VALUES (?, ?, 3)
-                ''', (user_id, arc_id))
-            except:
-                pass  # Не критично
-            
-            # КОММИТ и сразу закрываем
-            cursor.execute('COMMIT')
-            conn.close()
-            
-            logger.info(f"✅ Доступ ВЫДАН успешно (попытка {attempt + 1})")
-            return True
-            
-        except sqlite3.OperationalError as e:
-            if "locked" in str(e):
-                wait_time = (attempt + 1) * 0.3  # 0.3, 0.6, 0.9, 1.2, 1.5 секунд
-                logger.warning(f"БД занята, ждем {wait_time}с (попытка {attempt + 1}/5)")
-                time.sleep(wait_time)
-                continue
-            else:
-                logger.error(f"Ошибка SQL: {e}")
-                break
-        except Exception as e:
-            logger.error(f"Общая ошибка: {e}")
-            break
-    
-    # Если не удалось - пробуем САМЫЙ ПРОСТОЙ вариант
-    logger.warning("Пробуем самый простой вариант...")
     try:
-        conn = sqlite3.connect('mentor_bot.db')
-        cursor = conn.cursor()
+        # Просто добавляем доступ с типом 'trial'
         cursor.execute('''
-            INSERT OR IGNORE INTO user_arc_access (user_id, arc_id, access_type)
-            VALUES (?, ?, 'trial')
-        ''', (user_id, arc_id))
+            INSERT OR REPLACE INTO user_arc_access 
+            (user_id, arc_id, access_type, purchased_at)
+            VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+        ''', (user_id, arc_id, 'trial'))
+        
         conn.commit()
-        conn.close()
-        logger.info("✅ Самый простой вариант сработал")
+        print(f"✅ Бесплатный пробный доступ выдан: user {user_id} -> arc {arc_id}")
         return True
+    
     except Exception as e:
-        logger.error(f"❌ Даже простой вариант не сработал: {e}")
+        print(f"🚨 Ошибка выдачи пробного доступа: {e}")
         return False
+    
+    finally:
+        conn.close()
 
 def create_yookassa_payment(user_id, arc_id, amount, trial=False, description=""):
     """Создает платеж в Юкассе - С ВСЕМИ МЕТОДАМИ ОПЛАТЫ"""
@@ -2972,14 +3017,29 @@ def can_access_assignment(user_id, assignment_id, arc_id=None):
         # Если не передан arc_id, находим его
         if not arc_id:
             cursor.execute('''
-                SELECT d.arc_id 
+                SELECT d.arc_id, d.order_num as day_order
                 FROM assignments a
                 JOIN days d ON a.day_id = d.day_id
                 WHERE a.assignment_id = ?
             ''', (assignment_id,))
             result = cursor.fetchone()
             if result:
-                arc_id = result[0]
+                arc_id, day_order = result
+            else:
+                return False, "Задание не найдено"
+        else:
+            # Получаем номер дня для этого задания
+            cursor.execute('''
+                SELECT d.order_num as day_order
+                FROM assignments a
+                JOIN days d ON a.day_id = d.day_id
+                WHERE a.assignment_id = ? AND d.arc_id = ?
+            ''', (assignment_id, arc_id))
+            result = cursor.fetchone()
+            if result:
+                day_order = result[0]
+            else:
+                return False, "Задание не найдено"
         
         # Проверяем общий доступ к дуге
         cursor.execute('SELECT access_type FROM user_arc_access WHERE user_id = ? AND arc_id = ?', 
@@ -2987,26 +3047,15 @@ def can_access_assignment(user_id, assignment_id, arc_id=None):
         access = cursor.fetchone()
         
         if not access:
-            return False, "Нет доступа к этой части"
+            return False, "Нет доступа к этому марафону"
         
         access_type = access[0]
         
-        # Если это пробный доступ, проверяем ограничение в 3 задания
+        # ★★★ ИСПРАВЛЕННАЯ ЛОГИКА: ★★★
+        # Если это пробный доступ, проверяем что задание в первых 3 ДНЯХ
         if access_type == 'trial':
-            # Проверяем порядковый номер задания
-            cursor.execute('''
-                SELECT a.order_num 
-                FROM assignments a
-                JOIN days d ON a.day_id = d.day_id
-                WHERE a.assignment_id = ? AND d.arc_id = ?
-            ''', (assignment_id, arc_id))
-            
-            result = cursor.fetchone()
-            
-            if result:
-                assignment_order = result[0]
-                if assignment_order > 3:  # Только первые 3 задания
-                    return False, "Пробный доступ ограничен первыми 3 заданиями. Купите полный доступ."
+            if day_order > 3:  # Проверяем номер ДНЯ (не задания!)
+                return False, "Пробный доступ ограничен первыми 3 днями. Купите полный доступ."
         
         return True, "Доступ разрешен"
         
@@ -3251,24 +3300,794 @@ def set_user_as_admin(user_id):
 
 
 def get_user_active_arcs(user_id):
-    """Получает ВСЕ активные части пользователя (дата_начала <= сегодня <= дата_окончания)"""
+    """Получает активные части пользователя - УПРОЩЕННАЯ ВЕРСИЯ"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    # Для админов - показываем ВСЕ части к которым есть доступ
+    # Проверяем является ли пользователь админом
+    cursor.execute('SELECT is_admin FROM users WHERE user_id = ?', (user_id,))
+    user = cursor.fetchone()
+    is_admin = user and user[0] == 1
+    
+    if is_admin:
+        # Для админа - все части к которым есть доступ
+        cursor.execute('''
+            SELECT DISTINCT a.arc_id, a.title, a.дата_начала, a.дата_окончания, uaa.access_type
+            FROM user_arc_access uaa
+            JOIN arcs a ON uaa.arc_id = a.arc_id
+            WHERE uaa.user_id = ?
+            AND (a.дата_начала IS NOT NULL AND a.дата_начала != '')
+            ORDER BY a.дата_начала
+        ''', (user_id,))
+    else:
+        # Для обычных пользователей - только активные по датам
+        cursor.execute('''
+            SELECT DISTINCT a.arc_id, a.title, a.дата_начала, a.дата_окончания, uaa.access_type
+            FROM user_arc_access uaa
+            JOIN arcs a ON uaa.arc_id = a.arc_id
+            WHERE uaa.user_id = ? 
+            AND a.дата_начала IS NOT NULL 
+            AND a.дата_начала != ''
+            AND (
+                -- Часть активна СЕЙЧАС
+                (DATE(a.дата_начала) <= DATE('now') AND DATE(a.дата_окончания) >= DATE('now'))
+                OR
+                -- ИЛИ у пользователя есть доступ к будущей части
+                (DATE(a.дата_начала) > DATE('now') AND uaa.access_type = 'paid')
+            )
+            ORDER BY a.дата_начала
+        ''', (user_id,))
+    
+    arcs = cursor.fetchall()
+    conn.close()
+    
+    print(f"🔍 get_user_active_arcs: user_id={user_id}, is_admin={is_admin}, found={len(arcs)} arcs")
+    for arc in arcs:
+        print(f"   - {arc[1]} ({arc[2]} to {arc[3]})")
+    
+    return arcs
+
+def save_assignment_answer_with_day_auto_approve(user_id, assignment_id, day_id, answer_text, answer_files):
+    """Сохраняет ответ на задание с автоматическим принятием"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    # Сохраняем файлы как JSON
+    files_json = json.dumps(answer_files) if answer_files else None
+    
+    # Автоматический комментарий психолога
+    auto_comment = "✅ Задание принято автоматически."
+    
+    # Сохраняем с статусом 'approved' сразу
+    cursor.execute('''
+        INSERT OR REPLACE INTO user_progress_advanced 
+        (user_id, assignment_id, answer_text, answer_files, status, teacher_comment, viewed_by_student)
+        VALUES (?, ?, ?, ?, ?, ?, 0)
+    ''', (user_id, assignment_id, answer_text, files_json, 'approved', auto_comment))
+    
+    # Обновляем статистику дня если есть day_id
+    if day_id:
+        try:
+            cursor.execute('''
+                INSERT OR REPLACE INTO user_daily_stats 
+                (user_id, arc_id, day_id, date, assignments_completed, is_skipped)
+                VALUES (?, 
+                       (SELECT d.arc_id FROM days d JOIN assignments a ON d.day_id = a.day_id WHERE a.assignment_id = ?),
+                       ?, DATE('now'), 1, 0)
+            ''', (user_id, assignment_id, day_id))
+        except Exception as e:
+            print(f"⚠️ Ошибка обновления статистики дня: {e}")
+    
+    conn.commit()
+    conn.close()
+    print(f"✅ Задание {assignment_id} автоматически принято для пользователя {user_id}")
+
+def save_assignment_media(assignment_id, photos=None, audios=None, video_url=None):
+    """Сохраняет медиа-контент для задания"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    try:
+        photos_json = json.dumps(photos) if photos else None
+        audios_json = json.dumps(audios) if audios else None
+        
+        cursor.execute('''
+            UPDATE assignments 
+            SET content_photos = ?, content_audios = ?, video_url = ?
+            WHERE assignment_id = ?
+        ''', (photos_json, audios_json, video_url, assignment_id))
+        
+        conn.commit()
+        print(f"✅ Медиа сохранены для задания {assignment_id}")
+        return True
+    except Exception as e:
+        print(f"🚨 Ошибка сохранения медиа: {e}")
+        return False
+    finally:
+        conn.close()
+
+def get_assignment_media(assignment_id):
+    """Получает медиа-контент задания"""
     conn = sqlite3.connect('mentor_bot.db')
     cursor = conn.cursor()
     
     cursor.execute('''
-        SELECT a.arc_id, a.title, a.дата_начала, a.дата_окончания, uaa.access_type
-        FROM user_arc_access uaa
-        JOIN arcs a ON uaa.arc_id = a.arc_id
-        WHERE uaa.user_id = ? 
-          AND a.дата_начала <= DATE('now') 
-          AND a.дата_окончания >= DATE('now')
-          AND a.status = 'active'
-        ORDER BY a.дата_начала
-    ''', (user_id,))
+        SELECT content_photos, content_audios, video_url
+        FROM assignments 
+        WHERE assignment_id = ?
+    ''', (assignment_id,))
+    
+    result = cursor.fetchone()
+    conn.close()
+    
+    if result:
+        photos_json, audios_json, video_url = result
+        
+        # Парсим JSON
+        photos = []
+        audios = []
+        
+        if photos_json:
+            try:
+                photos = json.loads(photos_json)
+            except:
+                photos = []
+        
+        if audios_json:
+            try:
+                audios = json.loads(audios_json)
+            except:
+                audios = []
+        
+        return {
+            'photos': photos,
+            'audios': audios,
+            'video_url': video_url
+        }
+    
+    return {
+        'photos': [],
+        'audios': [],
+        'video_url': None
+    }
+
+def update_assignment_with_media_simple(file_path='courses_data.xlsx'):
+    """Простая загрузка медиа с отладкой"""
+    try:
+        print("=" * 50)
+        print("🔄 НАЧАЛО ЗАГРУЗКИ МЕДИА ИЗ EXCEL")
+        print("=" * 50)
+        
+        # 1. Проверяем файл
+        import os
+        if not os.path.exists(file_path):
+            print(f"❌ Файл {file_path} не найден!")
+            print(f"📁 Текущая папка: {os.getcwd()}")
+            return 0
+        
+        print(f"✅ Файл найден: {file_path}")
+        
+        # 2. Читаем Excel
+        import pandas as pd
+        df = pd.read_excel(file_path, sheet_name='Задания', dtype=str, keep_default_na=False)
+        print(f"📊 Прочитано {len(df)} строк из листа 'Задания'")
+        
+        # 3. Показываем колонки
+        print("📋 Колонки в файле:")
+        for col in df.columns:
+            print(f"  • '{col}'")
+        
+        # 4. Ищем колонку 'фото'
+        photo_column = None
+        for col in df.columns:
+            if 'фото' in str(col).lower():
+                photo_column = col
+                print(f"✅ Найдена колонка фото: '{col}'")
+                break
+        
+        if not photo_column:
+            print("❌ Колонка 'фото' не найдена!")
+            print("Доступные колонки:")
+            for col in df.columns:
+                print(f"  • {col}")
+            return 0
+        
+        # 5. Подключаемся к БД
+        conn = sqlite3.connect('mentor_bot.db')
+        cursor = conn.cursor()
+        
+        updated_count = 0
+        
+        # 6. Обрабатываем каждую строку
+        for index, row in df.iterrows():
+            try:
+                # ID задания
+                id_str = str(row.get('id', '')).strip()
+                if not id_str:
+                    continue
+                
+                assignment_id = int(float(id_str))
+                
+                # Фото
+                photo_val = str(row.get(photo_column, '')).strip()
+                print(f"\n🔍 Строка {index+2}, Задание {assignment_id}:")
+                print(f"  📸 Значение фото: '{photo_val}'")
+                print(f"  📏 Длина: {len(photo_val)} символов")
+                
+                if not photo_val or photo_val.lower() in ['nan', 'none', 'null', '']:
+                    print(f"  📭 Пропускаем - пустое значение")
+                    continue
+                
+                # Очищаем
+                clean_photo = photo_val
+                clean_photo = clean_photo.replace('[', '').replace(']', '')
+                clean_photo = clean_photo.replace('"', '').replace("'", "")
+                clean_photo = clean_photo.strip()
+                
+                print(f"  🧹 Очищенное: '{clean_photo}'")
+                
+                if len(clean_photo) < 50:  # file_id обычно длинный
+                    print(f"  ⚠️  Подозрительно короткий: {len(clean_photo)} символов")
+                    continue
+                
+                # Создаем JSON
+                photos_json = json.dumps([clean_photo])
+                print(f"  📋 JSON: {photos_json}")
+                
+                # Обновляем БД
+                cursor.execute('SELECT title FROM assignments WHERE assignment_id = ?', (assignment_id,))
+                if cursor.fetchone():
+                    cursor.execute('''
+                        UPDATE assignments 
+                        SET content_photos = ?
+                        WHERE assignment_id = ?
+                    ''', (photos_json, assignment_id))
+                    
+                    if cursor.rowcount > 0:
+                        updated_count += 1
+                        print(f"  ✅ ОБНОВЛЕНО!")
+                    else:
+                        print(f"  ⚠️  Задание найдено, но не обновлено")
+                else:
+                    print(f"  ❌ Задание {assignment_id} не найдено в БД")
+                    
+            except Exception as e:
+                print(f"  ❌ Ошибка обработки строки: {e}")
+        
+        # 7. Сохраняем и закрываем
+        conn.commit()
+        conn.close()
+        
+        print("\n" + "=" * 50)
+        print(f"📊 ИТОГ ЗАГРУЗКИ:")
+        print(f"✅ Обновлено заданий: {updated_count}")
+        print("=" * 50)
+        
+        return updated_count
+        
+    except Exception as e:
+        print(f"🚨 КРИТИЧЕСКАЯ ОШИБКА: {e}")
+        import traceback
+        traceback.print_exc()
+        return 0
+
+def get_arcs_with_dates():
+    """Возвращает дуги у которых указаны даты начала и окончания"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT arc_id, title, order_num, price, 
+               дата_начала, дата_окончания, бесплатный_период
+        FROM arcs 
+        WHERE status = 'active'
+        AND дата_начала IS NOT NULL 
+        AND дата_окончания IS NOT NULL
+        AND дата_начала != ''
+        AND дата_окончания != ''
+        ORDER BY order_num
+    ''')
     
     arcs = cursor.fetchall()
     conn.close()
     return arcs
+
+def get_current_and_future_arcs():
+    """Получает текущие и будущие дуги"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    # УБИРАЕМ status из WHERE
+    cursor.execute('''
+        SELECT arc_id, title, дата_начала, дата_окончания, price
+        FROM arcs 
+        WHERE дата_начала IS NOT NULL 
+        AND дата_окончания IS NOT NULL
+        ORDER BY дата_начала
+    ''')
+    
+    arcs = cursor.fetchall()
+    conn.close()
+    return arcs
+
+def load_all_media_from_excel(file_path='courses_data.xlsx'):
+    """Загружает ВСЕ типы медиа из Excel: фото, аудио, видео ссылки"""
+    try:
+        print("=" * 60)
+        print("🔄 УНИВЕРСАЛЬНАЯ ЗАГРУЗКА МЕДИА ИЗ EXCEL")
+        print("=" * 60)
+        
+        import os
+        import pandas as pd
+        import json
+        
+        # Проверка файла
+        if not os.path.exists(file_path):
+            print(f"❌ Файл {file_path} не найден!")
+            return {'status': 'error', 'message': 'Файл не найден', 'details': {}}
+        
+        print(f"✅ Файл найден: {file_path}")
+        
+        # Читаем Excel
+        df = pd.read_excel(file_path, sheet_name='Задания', dtype=str, keep_default_na=False)
+        print(f"📊 Прочитано {len(df)} строк")
+        
+        # Проверяем колонки
+        columns_found = []
+        columns_missing = []
+        
+        target_columns = {
+            'фото': 'content_photos',
+            'аудио': 'content_audios', 
+            'видео_ссылка': 'video_url'
+        }
+        
+        print("🔍 Поиск колонок в Excel:")
+        for excel_col, db_field in target_columns.items():
+            if excel_col in df.columns:
+                columns_found.append(excel_col)
+                print(f"  ✅ '{excel_col}' → {db_field}")
+            else:
+                columns_missing.append(excel_col)
+                print(f"  ❌ '{excel_col}' не найдена")
+        
+        if not columns_found:
+            print("⚠️  Не найдено ни одной колонки с медиа!")
+            return {'status': 'error', 'message': 'Колонки медиа не найдены', 'details': {}}
+        
+        # Подключаемся к БД
+        conn = sqlite3.connect('mentor_bot.db')
+        cursor = conn.cursor()
+        
+        stats = {
+            'total_rows': len(df),
+            'updated_assignments': 0,
+            'photos_loaded': 0,
+            'audios_loaded': 0,
+            'videos_loaded': 0,
+            'errors': 0,
+            'by_type': {}
+        }
+        
+        print("\n📝 Обработка заданий:")
+        
+        # Обрабатываем каждую строку
+        for index, row in df.iterrows():
+            try:
+                # ID задания
+                id_str = str(row.get('id', '')).strip()
+                if not id_str:
+                    continue
+                
+                assignment_id = int(float(id_str))
+                print(f"\n🔍 Задание {assignment_id}:")
+                
+                # Проверяем существует ли задание в БД
+                cursor.execute('SELECT title FROM assignments WHERE assignment_id = ?', (assignment_id,))
+                assignment_exists = cursor.fetchone()
+                
+                if not assignment_exists:
+                    print(f"  ⚠️  Задание не найдено в БД, пропускаем")
+                    continue
+                
+                # Подготавливаем данные для UPDATE
+                update_data = {}
+                update_sql_parts = []
+                update_params = []
+                
+                # 1. ФОТО
+                if 'фото' in df.columns:
+                    photo_val = str(row.get('фото', '')).strip()
+                    if photo_val and photo_val.lower() not in ['nan', 'none', 'null', '']:
+                        # Очищаем и создаем JSON
+                        clean_photo = photo_val.replace('[', '').replace(']', '').replace('"', '').replace("'", "").strip()
+                        if len(clean_photo) > 30:  # Проверяем что похоже на file_id
+                            photos_json = json.dumps([clean_photo])
+                            update_data['content_photos'] = photos_json
+                            update_sql_parts.append('content_photos = ?')
+                            update_params.append(photos_json)
+                            stats['photos_loaded'] += 1
+                            print(f"  📸 Фото: добавлено ({clean_photo[:30]}...)")
+                
+                # 2. АУДИО
+                if 'аудио' in df.columns:
+                    audio_val = str(row.get('аудио', '')).strip()
+                    if audio_val and audio_val.lower() not in ['nan', 'none', 'null', '']:
+                        clean_audio = audio_val.replace('[', '').replace(']', '').replace('"', '').replace("'", "").strip()
+                        if len(clean_audio) > 30:
+                            audios_json = json.dumps([clean_audio])
+                            update_data['content_audios'] = audios_json
+                            update_sql_parts.append('content_audios = ?')
+                            update_params.append(audios_json)
+                            stats['audios_loaded'] += 1
+                            print(f"  🎵 Аудио: добавлено ({clean_audio[:30]}...)")
+                
+                # 3. ВИДЕО ССЫЛКА
+                # В обработке видео добавьте поддержку file_id:
+                if 'видео_ссылка' in df.columns:
+                    video_val = str(row.get('видео_ссылка', '')).strip()
+                    if video_val and video_val.lower() not in ['nan', 'none', 'null', '']:
+                        # Очищаем
+                        clean_video = video_val.strip()
+                        
+                        # Проверяем: это file_id или ссылка?
+                        # File_id видео обычно начинается с BAACAgI или CgACAgI
+                        if clean_video.startswith(('BAACAgI', 'CgACAgI', 'BAACAgQ')):
+                            # Это file_id - сохраняем как есть
+                            update_data['video_url'] = clean_video
+                            update_sql_parts.append('video_url = ?')
+                            update_params.append(clean_video)
+                            stats['videos_loaded'] += 1
+                            print(f"  🎬 Видео (file_id): добавлено")
+                        
+                        # Это YouTube ссылка
+                        elif 'youtube.com' in clean_video or 'youtu.be' in clean_video:
+                            update_data['video_url'] = clean_video
+                            update_sql_parts.append('video_url = ?')
+                            update_params.append(clean_video)
+                            stats['videos_loaded'] += 1
+                            print(f"  🎬 Видео (YouTube): добавлено")
+                        
+                        # Другая ссылка
+                        elif clean_video.startswith('http'):
+                            update_data['video_url'] = clean_video
+                            update_sql_parts.append('video_url = ?')
+                            update_params.append(clean_video)
+                            stats['videos_loaded'] += 1
+                            print(f"  🎬 Видео (ссылка): добавлено")
+                
+                # Если есть что обновлять
+                if update_sql_parts:
+                    update_sql = ', '.join(update_sql_parts)
+                    update_params.append(assignment_id)  # WHERE условие
+                    
+                    cursor.execute(f'''
+                        UPDATE assignments 
+                        SET {update_sql}
+                        WHERE assignment_id = ?
+                    ''', update_params)
+                    
+                    if cursor.rowcount > 0:
+                        stats['updated_assignments'] += 1
+                        print(f"  ✅ Обновлено в БД")
+                    else:
+                        print(f"  ⚠️  Не обновлено (возможно данные те же)")
+                
+            except Exception as e:
+                stats['errors'] += 1
+                print(f"  ❌ Ошибка: {str(e)[:50]}")
+        
+        # Сохраняем и закрываем
+        conn.commit()
+        conn.close()
+        
+        # Формируем итоговую статистику
+        print("\n" + "=" * 60)
+        print("📊 ИТОГ ЗАГРУЗКИ:")
+        print(f"✅ Обработано строк: {stats['total_rows']}")
+        print(f"✅ Обновлено заданий: {stats['updated_assignments']}")
+        print(f"✅ Загружено фото: {stats['photos_loaded']}")
+        print(f"✅ Загружено аудио: {stats['audios_loaded']}")
+        print(f"✅ Загружено видео: {stats['videos_loaded']}")
+        print(f"❌ Ошибок: {stats['errors']}")
+        print("=" * 60)
+        
+        return {
+            'status': 'success',
+            'message': 'Медиа загружены успешно',
+            'stats': stats
+        }
+        
+    except Exception as e:
+        print(f"🚨 КРИТИЧЕСКАЯ ОШИБКА: {e}")
+        import traceback
+        traceback.print_exc()
+        return {'status': 'error', 'message': f'Ошибка: {str(e)}', 'details': {}}
+
+# ==================== ТЕСТИРОВАНИЕ ====================
+
+def load_tests_from_excel(file_path='courses_data.xlsx'):  # ← исправлено название
+    """Загружает тесты из Excel файла"""
+    try:
+        df = pd.read_excel(file_path, sheet_name='Тесты')
+        print(f"📊 Найден лист 'Тесты' с {len(df)} строками")
+        
+        conn = sqlite3.connect('mentor_bot.db')
+        cursor = conn.cursor()
+        
+        loaded_count = 0
+        
+        for index, row in df.iterrows():
+            test_id = row.get('test_id')
+            week_num = row.get('week_num')
+            question_text = row.get('question_text', '')
+            
+            # Пропускаем пустые строки
+            if pd.isna(week_num) or pd.isna(question_text) or str(question_text).strip() == '':
+                continue
+            
+            # Парсим варианты ответов
+            option1 = row.get('option1', '')
+            option2 = row.get('option2', '')
+            option3 = row.get('option3', '')
+            option4 = row.get('option4', '')
+            option5 = row.get('option5', '')
+            correct_option = row.get('correct_option', 'option1')
+            explanation = row.get('explanation', '')
+            
+            # Преобразуем correct_option в формат optionX
+            # Если в Excel текст типа "ответ 1", преобразуем в "option1"
+            if isinstance(correct_option, str):
+                if 'ответ' in correct_option.lower():
+                    # Из "ответ 1" делаем "option1"
+                    import re
+                    match = re.search(r'(\d+)', correct_option)
+                    if match:
+                        num = match.group(1)
+                        correct_option = f"option{num}"
+                elif correct_option.startswith('option'):
+                    # Уже в правильном формате
+                    pass
+                else:
+                    # Пробуем понять что это
+                    if correct_option == option1:
+                        correct_option = 'option1'
+                    elif correct_option == option2:
+                        correct_option = 'option2'
+                    elif correct_option == option3:
+                        correct_option = 'option3'
+                    elif correct_option == option4:
+                        correct_option = 'option4'
+                    elif correct_option == option5:
+                        correct_option = 'option5'
+            
+            # Проверяем существование
+            cursor.execute('''
+                SELECT test_id FROM tests 
+                WHERE week_num = ? AND question_text = ?
+            ''', (int(week_num), str(question_text)))
+            
+            exists = cursor.fetchone()
+            
+            if exists:
+                # Обновляем существующий
+                cursor.execute('''
+                    UPDATE tests SET
+                    option1 = ?, option2 = ?, option3 = ?, option4 = ?, option5 = ?,
+                    correct_option = ?, explanation = ?
+                    WHERE test_id = ?
+                ''', (str(option1), str(option2), str(option3), str(option4), str(option5), 
+                      str(correct_option), str(explanation), exists[0]))
+            else:
+                # Добавляем новый
+                cursor.execute('''
+                    INSERT INTO tests 
+                    (week_num, question_text, option1, option2, option3, 
+                     option4, option5, correct_option, explanation)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (int(week_num), str(question_text), str(option1), str(option2), 
+                      str(option3), str(option4), str(option5), 
+                      str(correct_option), str(explanation)))
+            
+            loaded_count += 1
+        
+        conn.commit()
+        conn.close()
+        
+        print(f"✅ Загружено {loaded_count} вопросов для тестов")
+        return loaded_count
+        
+    except Exception as e:
+        print(f"🚨 Ошибка загрузки тестов из Excel: {e}")
+        import traceback
+        traceback.print_exc()
+        return 0
+
+def get_tests_for_week(week_num):
+    """Получает все вопросы для теста конкретной недели"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT test_id, question_text, option1, option2, option3, option4, option5, 
+               correct_option, explanation
+        FROM tests 
+        WHERE week_num = ?
+        ORDER BY test_id
+    ''', (week_num,))
+    
+    tests = cursor.fetchall()
+    conn.close()
+    
+    return tests
+
+def get_available_tests(user_id, arc_id):
+    """Возвращает доступные тесты для пользователя - НОВАЯ ЛОГИКА"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    # Получаем текущий день в марафоне
+    current_day_info = get_current_arc_day(user_id, arc_id)
+    current_day = current_day_info['day_number'] if current_day_info else 0
+    
+    print(f"🔍 DEBUG: user_id={user_id}, arc_id={arc_id}, current_day={current_day}")
+    
+    # ★★ НОВАЯ ЛОГИКА: тесты доступны в диапазонах дней ★★
+    available_weeks = []
+    
+    if 1 <= current_day <= 7:  # Дни 1-7
+        available_weeks.append(1)
+    if 8 <= current_day <= 14:  # Дни 8-14
+        available_weeks.append(2)
+    if 15 <= current_day <= 21:  # Дни 15-21
+        available_weeks.append(3)
+    if 22 <= current_day <= 28:  # Дни 22-28
+        available_weeks.append(4)
+    
+    # Проверяем какие тесты уже пройдены
+    cursor.execute('''
+        SELECT week_num FROM test_results 
+        WHERE user_id = ? AND arc_id = ?
+    ''', (user_id, arc_id))
+    
+    completed_weeks = [row[0] for row in cursor.fetchall()]
+    
+    # Фильтруем доступные
+    result = []
+    for week in available_weeks:
+        status = "пройден" if week in completed_weeks else "доступен"
+        result.append({
+            'week_num': week,
+            'status': status,
+            'completed': week in completed_weeks
+        })
+    
+    conn.close()
+    print(f"🔍 DEBUG: доступные недели: {result}")
+    return result
+
+def get_test_progress(user_id, arc_id, week_num):
+    """Получает прогресс теста (если прервали)"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT current_question, answers_json 
+        FROM test_progress 
+        WHERE user_id = ? AND arc_id = ? AND week_num = ?
+    ''', (user_id, arc_id, week_num))
+    
+    result = cursor.fetchone()
+    conn.close()
+    
+    if result:
+        current_question, answers_json = result
+        answers = json.loads(answers_json) if answers_json else {}
+        return {
+            'current_question': current_question,
+            'answers': answers
+        }
+    return None
+
+def save_test_progress(user_id, arc_id, week_num, current_question, answers):
+    """Сохраняет прогресс теста"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    answers_json = json.dumps(answers)
+    
+    cursor.execute('''
+        INSERT OR REPLACE INTO test_progress 
+        (user_id, arc_id, week_num, current_question, answers_json)
+        VALUES (?, ?, ?, ?, ?)
+    ''', (user_id, arc_id, week_num, current_question, answers_json))
+    
+    conn.commit()
+    conn.close()
+
+def clear_test_progress(user_id, arc_id, week_num):
+    """Очищает прогресс теста (после завершения)"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        DELETE FROM test_progress 
+        WHERE user_id = ? AND arc_id = ? AND week_num = ?
+    ''', (user_id, arc_id, week_num))
+    
+    conn.commit()
+    conn.close()
+
+def save_test_result(user_id, arc_id, week_num, answers, score):
+    """Сохраняет результат теста"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    answers_json = json.dumps(answers)
+    
+    cursor.execute('''
+        INSERT INTO test_results 
+        (user_id, arc_id, week_num, answers_json, score)
+        VALUES (?, ?, ?, ?, ?)
+    ''', (user_id, arc_id, week_num, answers_json, score))
+    
+    conn.commit()
+    conn.close()
+    
+    # Очищаем прогресс
+    clear_test_progress(user_id, arc_id, week_num)
+    
+    return cursor.lastrowid
+
+def get_test_result(user_id, arc_id, week_num):
+    """Получает результат теста"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT result_id, score, answers_json, completed_at
+        FROM test_results 
+        WHERE user_id = ? AND arc_id = ? AND week_num = ?
+    ''', (user_id, arc_id, week_num))
+    
+    result = cursor.fetchone()
+    conn.close()
+    
+    if result:
+        result_id, score, answers_json, completed_at = result
+        return {
+            'result_id': result_id,
+            'score': score,
+            'answers': json.loads(answers_json),
+            'completed_at': completed_at
+        }
+    return None
+
+def get_all_test_results(user_id, arc_id=None):
+    """Получает все результаты тестов пользователя"""
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    if arc_id:
+        cursor.execute('''
+            SELECT result_id, arc_id, week_num, score, completed_at
+            FROM test_results 
+            WHERE user_id = ? AND arc_id = ?
+            ORDER BY completed_at DESC
+        ''', (user_id, arc_id))
+    else:
+        cursor.execute('''
+            SELECT result_id, arc_id, week_num, score, completed_at
+            FROM test_results 
+            WHERE user_id = ?
+            ORDER BY completed_at DESC
+        ''', (user_id,))
+    
+    results = cursor.fetchall()
+    conn.close()
+    
+    return results
 
 
 

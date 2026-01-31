@@ -182,6 +182,13 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     user_id = update.message.from_user.id
 
+    print(f"🔍 Кнопка нажата: '{text}'")
+    
+    # ДОБАВЬТЕ ЭТО ДЛЯ ОТЛАДКИ:
+    if text.startswith(("🔄 ", "⏳ ", "✅ ")):
+        print(f"🔍 Обрабатываем кнопку марафона: '{text}'")
+        print(f"🔍 context.user_data: {context.user_data.get('available_arcs', {})}")
+
     current_section = context.user_data.get('current_section')
     if current_section == 'feedback' and context.user_data.get('in_feedback_detail'):
         pass
@@ -223,7 +230,7 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 1. Обработка кнопки "🎯 Купить тренинг"
     if text == "🎯 Купить тренинг":
         keyboard = [
-            ["📖 Всё о тренинге"],
+            ["📖 Всё о марафоне"],
             ["💰 Купить доступ"],
             ["🔙 В главное меню"]
         ]
@@ -252,29 +259,29 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text == "💰 Купить полный доступ":
         # Проверяем выбрана ли дуга
         if 'current_arc_catalog' not in context.user_data:
-            await update.message.reply_text("❌ Сначала выберите часть")
+            await update.message.reply_text("❌ Сначала выберите марафон")
             return
         # Вызываем существующую функцию покупки через Юкассу
         await buy_arc_with_yookassa(update, context, trial=False)
         return
     
-    if text == "🎁 Пробный доступ (100₽)":  # Обрати внимание на название!
+    if text == "🎁 Пробный доступ(3 дня)":  # Обрати внимание на название!
         # 1. Проверяем выбрана ли часть
         if 'current_arc_catalog' not in context.user_data:
-            await update.message.reply_text("❌ Сначала выберите часть")
+            await update.message.reply_text("❌ Сначала выберите марафон")
             return
     
         # 2. Проверяем что это ТЕКУЩАЯ часть
         part_status = context.user_data.get('part_status', '')
-        if part_status != 'текущая':
+        if part_status != 'активный':
             await update.message.reply_text(
-                "❌ **Пробный доступ доступен только для текущей части!**\n\n"
-                "Для будущих и прошедших частей доступен только полный доступ.",
+                "❌ **Пробный доступ доступен только для активных марафонов!**\n\n"
+                "Для будущих марафонов доступен только полный доступ.",
                 parse_mode='Markdown'
             )
             return
     
-        await buy_arc_with_yookassa(update, context, trial=True)
+        await grant_free_trial_access(update, context)
         return
 
     # 0. Определяем обработчики для каждого раздела
@@ -327,7 +334,7 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await show_users_stats(update, context)
             return
         
-        if text == "📊 Посмотреть другую часть этого участника":
+        if text == "📊 Посмотреть другой марафон этого участника":
             user_info = context.user_data.get('admin_current_user')
             if user_info:
                 await show_admin_user_statistics(update, context)
@@ -364,27 +371,37 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "👥 Перейти в сообщество": go_to_community,
         "📊 Прогресс участников": show_users_stats,
         "🔙 Назад к тренингу": back_to_course_menu,
-        "🔙 Назад к списку частей": show_course_main,
+        "🔙 Выбор марафона": show_course_main,
         "📚 В меню заданий": my_assignments_menu,
         "📋 Принятые оферты": show_accepted_offers,
         "🔙 Назад в каталог": show_course_main,
         "📖 Инструкция": show_quick_guide,
-        "💬 Задать вопрос о тренинге": contact_psychologist,
+        "💬 Задать вопрос о марафоне": contact_psychologist,
         "📷 Только фото": start_photo_only_answer,
         "📝 Только текст": start_text_only_answer, 
         "📷+📝 Фото и текст": start_photo_text_answer,
         "🔙 Назад к частям тренинга": show_events,
         "💰 Купить полный доступ": lambda u, c: buy_arc_with_yookassa(u, c, trial=False),
-        "🎁 Пробный доступ (100₽)": lambda u, c: buy_arc_with_yookassa(u, c, trial=True),
+        "🎁 Пробный доступ(3 дня)": lambda u, c: buy_arc_with_yookassa(u, c, trial=True),
         "💰 Купить доступ заранее": lambda u, c: buy_arc_with_yookassa(u, c, trial=False),
         "🔙 Назад в меню заданий": show_available_assignments,
         "📚 В раздел Мои задания": my_assignments_menu,
         "💰 Купить заранее": lambda u, c: buy_arc_with_yookassa(u, c, trial=False),
-        "💰 Купить прошедшую часть": lambda u, c: buy_arc_with_yookassa(u, c, trial=False),
-        "📖 Всё о тренинге": show_about_course,
+        "📖 Всё о марафоне": show_about_course,
         "⚙️ Инструменты администратора": admin_tools_menu,
         "🔔 Отправить уведомление": start_notification,
         "🔙 Назад к инструментам": admin_tools_menu,
+        "🔙 Назад": show_training_catalog,
+        "📈 Тестирование": testing_menu,
+        "📈 Пройти тест": show_available_tests,  # Теперь это выбор марафона
+        "📊 Мои результаты": lambda u, c: show_test_results(u, c),
+        "📋 Показать все ответы": show_all_test_answers,
+        "🔙 Назад к тестированию": testing_menu,
+        "🔙 Выбрать другой марафон": lambda u, c: show_test_results(u, c),
+        "🔙 Назад к результатам": lambda u, c: show_test_results(u, c),
+        "📈 Пройти другой тест": show_available_tests,
+        "🔙 Назад к тестам марафона": back_to_arc_tests,
+        "🔙 Назад к результату": back_to_test_result,
     }
 
     
@@ -400,7 +417,7 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await show_instructions(update, context)
         return
     
-    if text == "👤 Автор тренинга":
+    if text == "👤 Авторы марафона":
         await show_author_info(update, context)
         return
 
@@ -408,11 +425,7 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await buy_arc_with_yookassa(update, context, trial=False)
         return
 
-    if text == "💰 Купить прошедшую часть":
-        await buy_arc_with_yookassa(update, context, trial=False)
-        return
-
-    if text == "💬 Ответ психолога" or text == "💬 Ответ психолога 🟡":
+    if text == "📂 Архив заданий" or text == "📂 Архив заданий":
         await show_feedback_parts(update, context)
         return
 
@@ -455,7 +468,7 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await show_assignment_for_admin(update, context)
         return
 
-    if text.startswith("📚"):  # 📚 вместо 🔄
+    if text.startswith("🏆"):  # 📚 вместо 🔄
         print(f"✅ Выбор части в feedback: {text}")
         await show_feedback_type(update, context)
         return
@@ -466,26 +479,8 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await show_assignment_for_admin(update, context)
         return
 
-    if text == "🟡 Новые ответы" or text == "✅ Завершенные задания":
-        print(f"✅ Обработка: {text}")
-    
-        viewed = 0 if text == "🟡 Новые ответы" else 1
-    
-        # Пробуем получить arc_id разными способами
-        arc_id = context.user_data.get('current_feedback_arc')
-    
-        if not arc_id:
-            # Пробуем получить из последнего задания
-            if 'current_feedback_assignment' in context.user_data:
-                # Используем сохраненное задание
-                await show_feedback_type(update, context)
-                return
-            else:
-                await update.message.reply_text("❌ Сначала выберите часть.")
-                await show_feedback_parts(update, context)
-                return
-    
-        await show_feedback_list(update, context, viewed=viewed)
+    if text == "✅ Завершенные задания":
+        await show_feedback_list(update, context, viewed=1)
         return
 
     # Если нажали на задание в разделе "Доступные задания"
@@ -499,17 +494,15 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await show_in_progress_assignments(update, context)
             return
 
-    if text == "📂 Архив заданий":
+    if text == "📂 Тестирование":
         await update.message.reply_text(
-            "📂️ **Архив заданий**\n\n"
-            "Архив откроется после завершения первой части.\n"
-            "Все купленные задания прошедшей части тренинга будут доступны разом в этом разделе.\n"
-            "Чтобы узнать какая часть идёт сейчас, зайдите в 'Доступные задания' или 'Всё о тренинге'->'Расписание тренинга'",
+            "Разде 'Тестирование' скоро появится!\n"
+            "Здесь будут доступны еженедельные тесты для проверки вашего прогресса.\n",
             parse_mode='Markdown'
         )
         return
 
-    elif text.startswith("🎯 Часть"):
+    elif text.startswith("🎯 Марафон"):
         await show_seminar_details(update, context)
         return
 
@@ -536,15 +529,15 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # 3. Обработка разделов каталога
-    if text == "📅 Расписание тренингов":
+    if text == "📅 Расписание марафонов":
         await show_events(update, context)
         return
 
-    if text == "🗓 Расписание семинаров":
+    if text == "🗓 Расписание вебинаров":
         await show_schedule(update, context)
         return
 
-    if text == "🔙 Назад к описанию тренинга":
+    if text == "🔙 Назад к описанию марафона":
         await show_about_course(update, context)
         return
 
@@ -613,14 +606,14 @@ async def back_to_course_menu(update: Update, context: ContextTypes.DEFAULT_TYPE
     course_title = context.user_data.get('current_course', 'СЕБЯ ВЕРНИ СЕБЕ')
     
     keyboard = [
-        ["📖 Всё о тренинге"],
+        ["📖 Всё о марафоне"],
         ["💰 Купить доступ"],
         ["🔙 В главное меню"]
     ]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     
     await update.message.reply_text(
-        f"📚 **{course_title}**\n\nВыберите часть:",
+        f"📚 **{course_title}**\n\nВыберите марафон:",
         reply_markup=reply_markup,
         parse_mode='Markdown'
     )
@@ -715,7 +708,7 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['current_section'] = 'admin'
     """Обновленная админ-панель"""
     keyboard = [
-        ["🆕 Новые задания", "✅ Принятые задания"],
+        ["✅ Принятые задания"],
         ["📊 Прогресс участников"],
         ["🔙 В главное меню"]
     ]
@@ -724,13 +717,15 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(
         "👨‍🏫 **Проверка заданий**\n\n"
-        "Выберите часть тренинга:",
+        "Выберите марафон:",
         reply_markup=reply_markup,
         parse_mode='Markdown'
     )
 
 
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    
     
     if context.user_data.get('notification_stage') == 'waiting_content':
         await process_notification_content(update, context)
@@ -939,11 +934,11 @@ async def my_assignments_menu(update: Update, context: ContextTypes.DEFAULT_TYPE
     user_id = update.message.from_user.id
     has_new = has_new_feedback(user_id)
 
-    feedback_button = "💬 Ответ психолога 🟡" if has_new else "💬 Ответ психолога"
+    feedback_button = "📂 Архив заданий" if has_new else "📂 Архив заданий"
     
     keyboard = [
-        ["📝 Доступные задания", feedback_button],
-        ["📊 Мой прогресс", "📂 Архив заданий"],
+        ["📝 Доступные задания", "📂 Архив заданий"],
+        ["📊 Мой прогресс", "📈 Тестирование"],
         ["🔙 В главное меню", "📖 Инструкция"]
     ]
     
@@ -952,11 +947,11 @@ async def my_assignments_menu(update: Update, context: ContextTypes.DEFAULT_TYPE
     await update.message.reply_text(
         "📚 **РАЗДЕЛ 'МОИ ЗАДАНИЯ'**\n\n"
         "**Здесь вы можете:**\n\n"
-        "• **Доступные задания** — задания для текущей части\n\n"
-        "• **Ответ психолога** — проверенные задания с ответом психолога\n\n"  
+        "• **Доступные задания** — показывает задания активного марафона\n\n"
+        "• **Архив заданий** — история ваших выполненных заданий\n\n"  
         "• **Мой прогресс** — статистика выполнения заданий\n\n"
         "• **Инструкция** — как работать с ботом\n\n"
-        "• **Архив заданий** — откроется после завершения первой части\n\n"
+        "• **Тестирование** — раздел с еженедельными тестами\n\n"
         "Выберите раздел:",
         reply_markup=reply_markup,
         parse_mode='Markdown'
@@ -973,11 +968,57 @@ async def show_available_assignments(update: Update, context: ContextTypes.DEFAU
     # ПОЛУЧАЕМ ВСЕ АКТИВНЫЕ ЧАСТИ (не одну!)
     active_arcs = get_user_active_arcs(user_id)
     
+    # ★★★ ДОБАВЬТЕ ЭТОТ КОД ДЛЯ ОТЛАДКИ:
+    print(f"🔍 DEBUG get_user_active_arcs для user_id={user_id}:")
+    print(f"  Вернулось: {active_arcs}")
+    print(f"  Количество: {len(active_arcs)}")
+    
     if not active_arcs:
+        # Проверим доступы вручную
+        conn = sqlite3.connect('mentor_bot.db')
+        cursor = conn.cursor()
+        cursor.execute('SELECT arc_id, access_type FROM user_arc_access WHERE user_id = ?', (user_id,))
+        user_accesses = cursor.fetchall()
+        print(f"🔍 user_arc_access для user_id={user_id}: {user_accesses}")
+        
+        # Проверим все части с датами
+        cursor.execute('''
+            SELECT arc_id, title, дата_начала, дата_окончания 
+            FROM arcs 
+            WHERE дата_начала IS NOT NULL AND дата_окончания IS NOT NULL
+        ''')
+        all_arcs = cursor.fetchall()
+        print(f"🔍 Все части с датами: {all_arcs}")
+        
+        today = datetime.now().date()
+        print(f"🔍 Сегодня: {today}")
+        
+        conn.close()
+        
+        # Создаем inline-клавиатуру
+        from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+        
+        keyboard = [
+            ["💰 Купить доступ"],
+            ["📖 Всё о марафонах"],
+            ["🔙 В главное меню"]
+        ]
+        
+        reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+        
         await update.message.reply_text(
-            "📅 **У вас нет активных потоков.**\n\n"
-            "Вы присоединитесь к потоку с даты его начала.\n"
-            "Посмотрите доступные потоки в разделе 'Каталог курсов'.",
+            "**У вас нет активных марафонов**\n\n"
+            "**Как начать участвовать?**\n"
+            "**Для начала перейдите в кардел 'купить доступ', там у вас будет выбор:**\n\n"
+            "✅ **Бесплатный пробный период:**\n"
+            "• Все задания первых трех дней марафона\n"
+            "• Сопровождение психолога\n"
+            "• Ответы на все вопросы по заданиям\n\n"
+            "✅ **Покупая полный доступ:**\n"
+            "• Полный доступ ко всем заданиям марафона\n"
+            "• Поддержка на протяжении всего марафона\n"
+            "• Доступ к сообществу участников\n\n",
+            reply_markup=reply_markup,
             parse_mode='Markdown'
         )
         return
@@ -1077,25 +1118,20 @@ async def show_available_assignments(update: Update, context: ContextTypes.DEFAU
         current_day_num = day_info['day_number']
     
     if arcs_summary:
-        message += "**Активные потоки:**\n" + "\n".join(arcs_summary) + "\n\n"
+        message += "**Активные марафоны:**\n" + "\n".join(arcs_summary) + "\n\n"
     
     # Статистика
-    message += f"📊 **Ваш прогресс:**\n"
-    message += f"• 🔵 Новых: {total_available}\n"
-    message += f"• 🟡 На проверке: {total_in_progress}\n"
-    message += f"• ✅ Проверено: {total_completed}\n\n"
+    message += f"• 🔵 Доступно заданий: {total_available}\n\n"
     
     # Инструкция
-    message += "💡 **Как работать:**\n"
-    message += "1. Нажмите на задание из списка ниже\n"
-    message += "2. Выполните и отправьте на проверку\n"
-    message += "3. Комментарий появится в разделе 'Ответ психолога'\n"
-    message += "4. Новые задания открываются в 06:00 по вашему времени\n\n"
-    
-    message += "**Обозначения в названиях:**\n"
-    message += "• (П1) - Поток 1\n"
-    message += "• (П2) - Поток 2\n"
-    message += "• и т.д.\n\n"
+    message += "💡 **Как работать:**\n\n"
+    message += "1. Нажмите на задание из списка ниже\n\n"
+    message += "2. Выберите подходящий способ ответа\n\n"
+    message += "3. Выполните задание и отправьте на проверку\n\n"
+    message += "4. Задания открываются последовательно: когда выполните задания одного дня, тогда откроются следующие\n\n"
+    message += "5. Выполненное задание будет храниться в разделе 'Архив заданий'\n\n"
+    message += "6. Новые задания открываются в 06:00 по вашему времени\n\n"
+    message += "7. Важно: успейте выполнить задания до завершения марафона. После окончания задания доступны не будут\n\n"
     
     message += "Выберите задание:"
     
@@ -1108,8 +1144,7 @@ async def show_available_assignments(update: Update, context: ContextTypes.DEFAU
     row = []
     for i, assignment in enumerate(all_assignments_info[:24]):  # Ограничиваем 24 заданиями
         # Формируем текст кнопки с указанием потока
-        short_arc = f"П{assignment['arc_id']}"  # П1, П2 и т.д.
-        btn_text = f"📝 {assignment['title']} ({short_arc})"
+        btn_text = f"📝 {assignment['title']}"
         
         row.append(btn_text)
         
@@ -1303,6 +1338,17 @@ async def start_assignment_answer(update: Update, context: ContextTypes.DEFAULT_
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     text = update.message.text
+
+
+    # ★ НОВОЕ: Обработка отмены получения file_id
+    if context.user_data.get('waiting_for_file_id'):
+        if text in ['отмена', 'отменить', 'cancel', 'стоп', 'stop']:
+            context.user_data.pop('waiting_for_file_id', None)
+            await update.message.reply_text(
+                "❌ **Режим получения File ID отменен.**",
+                parse_mode='Markdown'
+            )
+            return
 
     # Обработка текста для уведомлений
     if context.user_data.get('notification_stage') == 'waiting_content':
@@ -1586,6 +1632,44 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode='Markdown'
         )
         return
+
+    # === ОБРАБОТКА ВЫБОРА МАРАФОНА ===
+    if 'arc_selection_map' in context.user_data and update.message.text in context.user_data['arc_selection_map']:
+        await show_tests_for_arc(update, context)
+        return
+
+    # === ОБРАБОТКА ОТВЕТОВ ТЕСТА ===
+    if context.user_data.get('current_section') == 'testing' and update.message.text in ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "⏹️ Прервать тест"]:
+        await process_test_answer(update, context)
+        return
+    
+    # === ОБРАБОТКА ВЫБОРА ТЕСТА ===
+    if 'test_mapping' in context.user_data and update.message.text in context.user_data['test_mapping']:
+        await start_test(update, context)
+        return
+    
+    # === ОБРАБОТКА ВЫБОРА МАРАФОНА ДЛЯ РЕЗУЛЬТАТОВ ===
+    if 'arc_results_mapping' in context.user_data and update.message.text in context.user_data['arc_results_mapping']:
+        await show_tests_for_arc_results(update, context)
+        return
+    
+    # === ОБРАБОТКА ВЫБОРА ТЕСТА ДЛЯ РЕЗУЛЬТАТОВ ===
+    if 'test_results_mapping' in context.user_data and update.message.text in context.user_data['test_results_mapping']:
+        test_info = context.user_data['test_results_mapping'][update.message.text]
+        await show_test_results(update, context, 
+                              update.message.from_user.id,
+                              test_info['arc_id'],
+                              test_info['week_num'])
+        return
+
+    # === ОБРАБОТКА ОТВЕТОВ ТЕСТА ===
+    # Теперь проверяем не цифры, а наличие активного теста
+    if context.user_data.get('current_test') and not context.user_data.get('waiting_for_question'):
+        # ★★ ИСПРАВЛЕНИЕ: Проверяем не кнопки 1️⃣-5️⃣, а любой текст при активном тесте
+        # (кроме специальных команд)
+        if text != "⏹️ Прервать тест":
+            await process_test_answer(update, context)
+            return
     
 async def show_final_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показывает финальные кнопки после ответа (фото+текст)"""
@@ -1760,7 +1844,7 @@ async def show_new_assignments(update: Update, context: ContextTypes.DEFAULT_TYP
     
     await update.message.reply_text(
         "🆕 **Новые задания для проверки:**\n\n"
-        "Выберите участника и часть:",
+        "Выберите участника и марафон:",
         reply_markup=reply_markup,
         parse_mode='Markdown'
     )
@@ -1828,7 +1912,7 @@ async def show_student_part_assignments(update: Update, context: ContextTypes.DE
     await update.message.reply_text(
         f"📋 **Новые задания участника:**\n\n"
         f"👤 **Участник:** {display_name}\n"
-        f"🔄 **Часть:** {part_title}\n"
+        f"🔄 {part_title}\n"
         f"📊 **Всего заданий:** {len(assignments)}\n\n"
         f"Выберите задание для проверки:",
         reply_markup=reply_markup,
@@ -2020,13 +2104,60 @@ async def show_assignment_for_admin(update: Update, context: ContextTypes.DEFAUL
     display_name = fio if fio else username
     message = f"**📝 Задание: {assignment_title}**\n\n"
     message += f"**Участник:** {display_name}\n"
-    message += f"**Часть тренинга:** {arc_title}\n"
+    message += f"{arc_title}\n"
     message += f"**День:** {day_title}\n\n"
 
     await update.message.reply_text(message, parse_mode='Markdown')
 
+    # ★ ИСПРАВЛЕНО: Получаем медиа-контент задания
+    from database import get_assignment_media
+    media_data = None
+
+    try:
+        media_data = get_assignment_media(assignment_id)
+        print(f"🔍 Получены медиа для задания {assignment_id} в админке: {media_data}")
+    except Exception as e:
+        print(f"⚠️ Ошибка получения медиа в админке: {e}")
+        media_data = {'photos': [], 'audios': [], 'video_url': None}
+
     if content_text:
         await send_long_message(update, content_text, "**Задание:**")
+
+    # ★ ИСПРАВЛЕНО: Показываем медиа задания в админке
+    # 1. Фото задания (если есть и не пустой список)
+    if media_data and media_data.get('photos'):
+        photos = media_data['photos']
+        if isinstance(photos, list) and photos:
+            for i, photo_id in enumerate(photos[:3], 1):
+                try:
+                    await update.message.reply_photo(
+                        photo=photo_id,
+                        caption=f"🖼️ Фото {i} к заданию"
+                    )
+                except Exception as e:
+                    print(f"🚨 Ошибка отправки фото {i} в админке: {e}")
+
+    # 2. Аудио задания (если есть и не пустой список)
+    if media_data and media_data.get('audios'):
+        audios = media_data['audios']
+        if isinstance(audios, list) and audios:
+            for i, audio_id in enumerate(audios[:2], 1):
+                try:
+                    await update.message.reply_audio(
+                        audio=audio_id,
+                        caption=f"🎵 Аудио {i} к заданию"
+                    )
+                except Exception as e:
+                    print(f"🚨 Ошибка отправки аудио {i} в админке: {e}")
+
+    # 3. Видео задания (если есть и не пустая ссылка)
+    if media_data and media_data.get('video_url'):
+        video_url = media_data['video_url']
+        if video_url and video_url.strip():
+            video_msg = "🎬 **Видео к заданию:**\n"
+            video_msg += f"{video_url}"
+            await update.message.reply_text(video_msg, parse_mode='Markdown')
+
     if answer_text:
         await send_long_message(update, answer_text, "**Ответ участника:**")
     
@@ -2134,15 +2265,7 @@ async def finish_approval(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def submit_assignment(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     
-    day_title = context.user_data.get('current_day')
-    arc_id = context.user_data.get('current_arc_id')
-
-    if day_title and arc_id:
-        from database import get_day_id_by_title_and_arc
-        day_id = get_day_id_by_title_and_arc(day_title, arc_id)
-        if day_id:
-            context.user_data['current_day_id'] = day_id
-
+    # Проверка доступности дня (оставляем как есть)
     day_id = context.user_data.get('current_day_id')
     if day_id:
         from database import is_day_available_for_user
@@ -2169,6 +2292,7 @@ async def submit_assignment(update: Update, context: ContextTypes.DEFAULT_TYPE):
     answer_files = context.user_data.get('answer_files', [])
     questions = context.user_data.get('questions', [])
     
+    # Проверки на наличие ответа (оставляем как есть)
     if answer_type == 'Только_фото':
         if not answer_files:
             await update.message.reply_text(
@@ -2201,12 +2325,14 @@ async def submit_assignment(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
     
+    # Формируем полный ответ с вопросами
     full_answer = answer_text or "Ответ не содержит текста."
     if questions:
         full_answer += "\n\n**Вопросы:**\n" + "\n".join(f"- " + q for q in questions)
     
-    from database import save_assignment_answer_with_day
-    save_assignment_answer_with_day(
+    # ⭐ ИЗМЕНЕНИЕ: сразу ставим статус 'approved' вместо 'submitted'
+    from database import save_assignment_answer_with_day_auto_approve
+    save_assignment_answer_with_day_auto_approve(
         user_id=user_id,
         assignment_id=assignment_id,
         day_id=day_id,
@@ -2214,22 +2340,28 @@ async def submit_assignment(update: Update, context: ContextTypes.DEFAULT_TYPE):
         answer_files=answer_files
     )
     
+    # Очищаем данные
     context.user_data['answering'] = False
     context.user_data['answer_type'] = None
     context.user_data['answer_text'] = None
     context.user_data['answer_files'] = []
     context.user_data['questions'] = []
     
+    # ⭐ ИЗМЕНЕНИЕ: сообщение об автоматическом принятии
     await update.message.reply_text(
-        "🎉 **Задание отправлено на проверку!**\n\n"
+        "🎉 **Задание принято автоматически!**\n\n"
         f"**Тип ответа:** {answer_type.replace('_', ' ').title()}\n"
-        "✅ Ваш ответ сохранен\n\n"
-        "**Теперь задание заблокировано для изменений.**\n"
-        "Ожидайте обратную связь от психолога в разделе 'Ответ психолога'.",
+        "✅ Ваш ответ сохранен и принят. У психолога есть возможность просмотреть все ваши ответы на задания.\n\n"
+        "**📋 Задание завершено!**\n"
+        "После завершения задания в него нельзя внести изменения.\n\n"
+        "**💬 Если есть вопросы:**\n"
+        "Вы можете проконсультироваться с психологом в разделе 'Личная консультация'.\n\n"
+        "**📚 Чтобы посмотреть ваши ответы:**\n"
+        "Перейдите в раздел 'Архив заданий' → 'Завершенные задания'",
         parse_mode='Markdown'
     )
     
-    await start(update, context)
+    await my_assignments_menu(update, context)
 
 async def show_approved_assignments(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['view_mode'] = 'approved'
@@ -2285,7 +2417,7 @@ async def show_approved_assignments(update: Update, context: ContextTypes.DEFAUL
     
     await update.message.reply_text(
         "✅ **Принятые задания:**\n\n"
-        "Выберите участника и часть:",
+        "Выберите участника и марафон:",
         reply_markup=reply_markup,
         parse_mode='Markdown'
     )
@@ -2355,7 +2487,7 @@ async def show_student_part_approved(update: Update, context: ContextTypes.DEFAU
     await update.message.reply_text(
         f"📋 **Принятые задания участника:**\n\n"
         f"👤 **Участник:** {display_name}\n"
-        f"🔄 **Часть:** {part_title}\n"
+        f"🔄 {part_title}\n"
         f"📊 **Всего принято:** {len(assignments)}\n\n"
         f"Выберите задание для просмотра:",
         reply_markup=reply_markup,
@@ -2425,7 +2557,7 @@ async def show_assignment_approved(update: Update, context: ContextTypes.DEFAULT
 
     header = f"**✅ Принятое задание: {assignment_title}**\n\n"
     header += f"**Участник:** {display_name}\n"
-    header += f"**Часть тренинга:** {arc_title}\n"
+    header += f" {arc_title}\n"
     header += f"**День:** {day_title_display}\n\n"
     await update.message.reply_text(header, parse_mode='Markdown')
 
@@ -2709,7 +2841,7 @@ async def show_course_details(update: Update, context: ContextTypes.DEFAULT_TYPE
         status = "🔓" if is_available else "🔒"
         keyboard.append([f"{status} {arc_title}"])
     
-    keyboard.append(["🔙 Назад к тренингам"])
+    keyboard.append(["🔙 Назад в каталог"])
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     
     await update.message.reply_text(
@@ -2720,236 +2852,299 @@ async def show_course_details(update: Update, context: ContextTypes.DEFAULT_TYPE
     )
 
 def get_course_arcs(course_title):
-    """Получает часть тренинга с проверкой доступности по датам"""
+    """Получает часть тренинга с проверкой доступности по датам - ИСПРАВЛЕННАЯ"""
     conn = sqlite3.connect('mentor_bot.db')
     cursor = conn.cursor()
     
     cursor.execute('''
-        SELECT a.arc_id, a.title, 
-               (a.date_start <= DATE('now') AND a.date_end >= DATE('now')) as is_available
-        FROM arcs a
-        JOIN courses c ON a.course_id = c.course_id
-        WHERE c.title = ?
-        ORDER BY a.order_num
+        SELECT arc_id, title, order_num, price, 
+               дата_начала, дата_окончания, бесплатный_период, 
+               status, is_available
+        FROM arcs 
+        WHERE course_id = (SELECT course_id FROM courses WHERE title = ?) 
+        AND status = 'active'
+        AND дата_начала IS NOT NULL 
+        AND дата_окончания IS NOT NULL
+        ORDER BY order_num
     ''', (course_title,))
     
     arcs = cursor.fetchall()
     conn.close()
-    return arcs
+    
+    today = datetime.now().date()
+    result = []
+    
+    for arc in arcs:
+        arc_id, title, order_num, price, start_date_str, end_date_str, free_period, status, is_available = arc
+        
+        # Пропускаем если нет дат (уже отфильтровано, но на всякий случай)
+        if not start_date_str or not end_date_str:
+            print(f"⚠️ Пропущена часть '{title}' - отсутствуют даты")
+            continue
+            
+        try:
+            # Преобразуем строку в дату
+            if isinstance(start_date_str, str):
+                if ' ' in start_date_str:
+                    start_date = datetime.strptime(start_date_str, '%Y-%m-%d %H:%M:%S').date()
+                else:
+                    start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+            else:
+                start_date = start_date_str
+            
+            if isinstance(end_date_str, str):
+                if ' ' in end_date_str:
+                    end_date = datetime.strptime(end_date_str, '%Y-%m-%d %H:%M:%S').date()
+                else:
+                    end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+            else:
+                end_date = end_date_str
+            
+            # Определяем статус
+            if today < start_date:
+                arc_status = 'future'
+            elif start_date <= today <= end_date:
+                arc_status = 'active'
+            else:
+                arc_status = 'past'
+            
+            result.append({
+                'arc_id': arc_id,
+                'title': title,
+                'order_num': order_num,
+                'price': price,
+                'start_date': start_date_str,
+                'end_date': end_date_str,
+                'status': arc_status,
+                'free_period': free_period,
+                'is_available': is_available
+            })
+            
+        except Exception as e:
+            print(f"🚨 Ошибка обработки части '{title}': {e}")
+            continue
+    
+    return result
 
 async def show_about_course(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Страница 'Всё о тренинге' с подразделами и ссылкой на Телеграф"""
-    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    """Страница 'Всё о марафоне' с подразделами и ссылкой на Телеграф"""
     
     message_text = """
-Психологический поддерживающий тренинг
-"СЕБЯ ВЕРНИ СЕБЕ"
+Проект ТВОЁ ДЕЛО https://t.me/tvoedeloart представляет: 
 
-Длится один год, с 20 декабря 2025, по 20 декабря 2026
-Тренинг разделён на восемь частей, каждая часть состоит из 40 упражнений, для ежедневного выполнения направленных на самонаблюдение, и трансформацию личности, через индивидуальную психофизическую работу. Каждая из восьми частей посвящена работе над одной из тем:
+🔥Марафон «РЕГУЛЯРНЫЙ МЕНЕДЖМЕНТ»: Стань архитектором своего времени!
+🔥 Длительность: 4 недели интенсивной практики 
+окончание регистрации 25 января,  
+старт в вторник 27 января 
+Финиш  24 февраля 
 
-Часть первая: Самонаблюдение и Намеренье.
-20 декабря - 1 февраля 2026 года
+Регистрируйтесь на марафон «Регулярный менеджмент» по ссылке: https://kasimov.tb.ru
 
-Часть вторая: Инвентаризация ресурсов
-1 февраля - 20 марта 2026 года
 
-Часть третья: Самонаблюдение в действиях
-21 марта - 1 мая 2026 года
+🌀 Вас когда-нибудь посещало чувство, что вы управляете не бизнесом или карьерой, а хаосом? Знакомо? 
 
-Часть четвёртая: Действие в группе
-2 мая - 21 июня 2026 года
+Марофон «Регулярный менеджмент» познакомит вас сэфективными   инструментами управления, и научит  применять на их практике! 
 
-Часть пятая: Лидерство и власть
-22 июня - 1 августа 2026 года
+📘 Матрица Эйзенхауэра, цикл Деминга, SMART если эти слова звучат как сухой менеджерский лексикон, вы не знаете как эти инструменты глубоки и прекрасны! 
 
-Часть шестая: Принятие результата
-22 июня - 1 августа 2026 года
+Вы, возможно, читали о них в книгах, но они так и остались теорией, потому что их некому было оживить, встроить в плоть и кровь вашего ежедневного труда. Давайте это исправим! 
 
-Часть седьмая: Осознание опыта
-2 августа - 22 сентября 2026 года
+Знание, не ставшее привычкой: мертвое знание. Оживим информацию энергией опыта и действия! 
 
-Часть восьмая: Интеграция частей
-2 ноября - 20 декабря 2026 года
+👨‍💼 Я, Артём Касимов, организационный психолог и предприниматель, приглашаю вас на интенсивный четырехнедельный марафон «Регулярный менеджмент». 
 
-Участникам тренинга доступны двух дневные семинары по тренингу:
-19 -21 декабря 2025  
-30 января - 1 февраля 2026 
-20 -22 марта 2026 
-1- 3 мая 2026 - Домбай
-19- 21 июня 2026 
-31 июля - 2 августа 2026
-25 - 27 сентября 2026
-30 октября - 1 ноября 2026
-Регистрация участия в семинаре 100% оплатой. 
-Количество мет ограничено, 16 человек 
-Подробное описание на сайте https://svs-365.tb.ru/
+🏆 Что вы получите: 
 
-Участникам тренинга доступна группы психологической поддержки (ГПП):
-"КРУГ" каждую среду, и четверг, 
-Регистрация участия в ГПП 100% оплатой. 
-Количество мет ограничено, 8 человек в сессию
-Подробное описание на сайте https://round.tb.ru/
+🎯 Прочный навык, синтез информации и вашего опыта. Система мышления, которая будет работать на вас каждый день, помогая отделять зерна от плевел. 
 
-Участникам тренинга доступно индивидуальное психологическое консультирование психолога, автора проекта СЕБЯ ВЕРНИ СЕБЕ:
- 
-Регистрация участия в сессии 100% оплатой. 
-Количество мет ограничено,
-Подробное описание на сайте (https://kasimov.tb.ru/)
+🧩 Четкий личный алгоритм управления задачами и проектами от идеи до результата. 
 
-Участникам тренинга доступно индивидуальное психологическое консультирование психологов, участников проекта:
- 
-Регистрация участия в сессии 100% оплатой. 
-Количество мет ограничено,
+✅ Конкретный результат в виде реализованных важных задач, на которые у вас «не было времени». 
+
+🧭 Выход в стратегическое планирование. Ваше мышление перестроится с режима «реагирования», в режим «наблюдения», «коррекции» и а затем  режим «создания». 
+
+⚙️ Почему этот марафон работает? Потому что он построен на принципах научно-доказательной психологии, а не на мотивационных лозунгах. 
+
+🧠 Когнитивно-поведенческий подход поможет нам выявить и скорректировать те автоматические мысли и внутренние установки, которые саботируют вашу организованность: «Сделаю позже», «Надо сделать все идеально», «Это срочно!».
+
+
+📅 Как устроен марафон: 
+
+Длительность: 4 недели интенсивной практики. 
+
+📝 Формат: Ежедневный персональный трекинг через вопросы и отчеты + еженедельная групповая онлайн-встреча. 
+
+👥 Групповая встреча: Каждый вторник в 20:00 по Екатеринбургу. 30 минут разбора теории и 30 минут ответов на ваши личные вопросы. Встречи проходят на Яндекс.Телемосте, запись доступна всем участникам. 
+
+⚖️ Особая атмосфера: Это рабочая группа для серьезных людей. Участники, которые пропускают встречи и не выполняют задания, будут исключаться из марафона без возврата средств. 
+
+🏁 Ценность:
+1. Все, кто дойдет до финиша, получат эксклюзивную возможность оформить контракт на внедрение регулярного менеджмента для своей команды на специальных условиях. И персональное предложение на сессию стратегического планирования. 
+
+2. В подарок каждый получит персональную 60-минутную консультацию со мной, организационным психологом, Атёмом Касомовым, очно или дистанционно для решения вашего запроса. 
+
+💰 Инвестиция и детали
+👥 Ваше время и внимание! Работа каждый день! Размер группы: Не более 12 человек. Это гарантирует персональное внимание и качество групповой динамики. 
+
+💳 Стоимость участия: 10 000 рублей. В эту сумму входят все материалы, ежедневное сопровождение, доступ к групповым встречам и их записям на весь период марафона. 
+
+📲 Как зарегистрироваться: Перейдите на сайт https://kasimov.tb.ru, найдите в списке программ «Марафон РЕГУЛЯРНЫЙ МЕНЕДЖМЕНТ» и регистрируйтесь оплатой. 
+
+ВОЗЬМУ В ПРОЕКТ ТОЛЬКО 12 ЧЕЛОВЕК! Набор открыт
+🤝 Важный момент: По окончании марафона состоится общая встреча для всех участников, в том числе и для тех, кто сошел с дистанции. 
+
+🧠 Четыре недели — это срок, за который формируется новая нейронная связь, закладывается фундамент привычки. 
+Регистрируйтесь на марафон «Регулярный менеджмент» по ссылке: https://kasimov.tb.ru 
+
+С уважением и верой в ваш результат, Артём Касимов, организационный психолог.
 """
-    
-    inline_keyboard = [[
-        InlineKeyboardButton("📄 Подробное описание тренинга", 
-                           url="https://telegra.ph/Sebya-verni-sebe-12-17")
-    ]]
-    inline_markup = InlineKeyboardMarkup(inline_keyboard)
-    
-    reply_keyboard = [
-        ["📅 Расписание тренингов"],
-        ["🗓 Расписание семинаров"],
-        ["💬 Задать вопрос о тренинге"],
-        ["🔙 Назад к тренингу", "🔙 В главное меню"]
+
+    keyboard = [
+        ["📅 Расписание марафонов"],
+        ["🗓 Расписание вебинаров"],
+        ["💬 Задать вопрос о марафоне"],
+        ["🔙 Назад","🔙 В главное меню"]
     ]
-    reply_markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True)
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     
     await update.message.reply_text(
-        message_text,
-        reply_markup=inline_markup,
-        parse_mode='Markdown'
-    )
-    
-    await update.message.reply_text(
-        "Выберите часть тренинга:",
+        "Выберите марафон:",
         reply_markup=reply_markup
     )
 
 async def show_course_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Страница 'Купить доступ' - показывает все части с датами"""
-    context.user_data['current_section'] = 'courses'
+    """Страница 'Купить доступ' - показывает все части с датами ТОЛЬКО с указанными датами"""
+    user_id = update.message.from_user.id
     
-    from database import get_course_arcs
-    arcs = get_course_arcs("Себя верни себе")
-    
-    if not arcs:
-        await update.message.reply_text("❌ Ошибка загрузки частей")
-        return
-    
-    from datetime import datetime
-    today = datetime.now().date()
-    
-    # Получаем более подробную информацию о дугах
+    # Получаем курс
     conn = sqlite3.connect('mentor_bot.db')
     cursor = conn.cursor()
+    cursor.execute('SELECT course_id, title FROM courses LIMIT 1')
+    course = cursor.fetchone()
+    conn.close()
     
-    detailed_arcs = []
-    for arc_id, arc_title, is_available in arcs:
-        if arc_id == 0:
-            continue
+    if not course:
+        await update.message.reply_text("❌ Активных марафонов не найдено")
+        return
+    
+    course_id, course_title = course
+    
+    # Получаем только дуги с датами
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT arc_id, title, order_num, price, 
+               дата_начала, дата_окончания, бесплатный_период
+        FROM arcs 
+        WHERE course_id = ? 
+        AND дата_начала IS NOT NULL 
+        AND дата_начала != ''
+        AND дата_окончания IS NOT NULL
+        AND дата_окончания != ''
+        ORDER BY order_num
+    ''', (course_id,))
+    
+    arcs = cursor.fetchall()
+    conn.close()
+    
+    if not arcs:
+        await update.message.reply_text(
+            "📭 **На данный момент доступных марафонов.**\n\n"
+            "Новые марафоныв появятся позже. Следите за обновлениями!",
+            parse_mode='Markdown'
+        )
+        return
+    
+    # Группируем по статусам
+    today = datetime.now().date()
+    current_arcs = []
+    future_arcs = []
+    
+    for arc in arcs:
+        arc_id, title, order_num, price, start_date_str, end_date_str, free_period = arc
         
-        cursor.execute('SELECT дата_начала, дата_окончания, price FROM arcs WHERE arc_id = ?', (arc_id,))
-        result = cursor.fetchone()
-        
-        if result:
-            start_date_str, end_date_str, price = result
-            
-            # Конвертируем даты
-            start_date = datetime.fromisoformat(start_date_str).date() if isinstance(start_date_str, str) else start_date_str
-            end_date = datetime.fromisoformat(end_date_str).date() if isinstance(end_date_str, str) else end_date_str
+        try:
+            # Парсим даты
+            if isinstance(start_date_str, str):
+                start_date = datetime.strptime(start_date_str.split()[0], '%Y-%m-%d').date()
+            else:
+                continue
+                
+            if isinstance(end_date_str, str):
+                end_date = datetime.strptime(end_date_str.split()[0], '%Y-%m-%d').date()
+            else:
+                continue
             
             # Определяем статус
             if start_date <= today <= end_date:
-                status = "текущая"
-                status_icon = "🔄"
-                days_left = (end_date - today).days
-                status_text = f"идёт сейчас ({days_left} дней осталось)"
+                current_arcs.append({
+                    'arc_id': arc_id,
+                    'title': title,
+                    'start_date': start_date_str,
+                    'end_date': end_date_str,
+                    'price': price,
+                    'status': 'активный'
+                })
             elif today < start_date:
-                status = "будущая"
-                status_icon = "⏳"
-                days_to_start = (start_date - today).days
-                status_text = f"начнётся через {days_to_start} дней"
-            else:
-                status = "прошедшая"
-                status_icon = "📜"
-                status_text = "завершена"
-            
-            detailed_arcs.append({
-                'arc_id': arc_id,
-                'title': arc_title,
-                'status': status,
-                'status_icon': status_icon,
-                'status_text': status_text,
-                'start_date': start_date,
-                'end_date': end_date,
-                'price': price,
-                'is_available': is_available
-            })
+                future_arcs.append({
+                    'arc_id': arc_id,
+                    'title': title,
+                    'start_date': start_date_str,
+                    'end_date': end_date_str,
+                    'price': price,
+                    'status': 'скоро начнётся'
+                })
+                
+        except Exception as e:
+            print(f"⚠️ Ошибка обработки части '{title}': {e}")
+            continue
     
-    conn.close()
+    # Формируем сообщение
+    message = f"**КУПИТЬ ДОСТУП**\n\n"
+    message += f"**Обозначения:**\n"
+    message += f"• 🔄 - Авктивный марафон (уже начался)\n"
+    message += f"• ⏳ - Марафон который скоро начнётся\n\n"
+    message += f"**Для будущих марафонов доступна предрегистрация**\n\n"
     
-    # Сортируем: текущая → будущие → прошедшие
-    order = {'текущая': 0, 'будущая': 1, 'прошедшая': 2}
-    detailed_arcs.sort(key=lambda x: (order[x['status']], x['start_date']))
-    
-    # Формируем клавиатуру
-    keyboard = []
-    row = []
-    
-    for arc in detailed_arcs:
-        # Формат: 🔄 Часть 1 (идёт сейчас)
-        btn_text = f"{arc['status_icon']} {arc['title']}"
-        row.append(btn_text)
+    if not current_arcs and not future_arcs:
+        message += "📭 **Нет доступных марафонов.**\n"
+        message += "Новые марафоны появятся позже."
         
-        if len(row) == 2:
-            keyboard.append(row)
-            row = []
+        keyboard = [["🔙 В главное меню"]]
+        reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+        
+        await update.message.reply_text(message, reply_markup=reply_markup, parse_mode='Markdown')
+        return
     
-    if row:
-        keyboard.append(row)
+    message += "👇 **Выберите марафон для покупки:**"
     
-    keyboard.append(["🔙 Назад к тренингу"])
+    # Создаем клавиатуру
+    keyboard = []
+    
+    # Текущие части
+    for arc in current_arcs:
+        keyboard.append([f"🔄 {arc['title']} ({arc['status']})"])
+    
+    # Будущие части
+    for arc in future_arcs[:5]:
+        keyboard.append([f"⏳ {arc['title']} ({arc['status']})"])
+    
+    
+    keyboard.append(["🔙 В главное меню"])
+    
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-    
-    # Формируем информационное сообщение
-    message = "**Купить доступ к частям тренинга**\n\n"
-    
-    # Показываем текущую часть отдельно
-    current_arc = next((a for a in detailed_arcs if a['status'] == 'текущая'), None)
-    if current_arc:
-        message += f"**🔄 ТЕКУЩАЯ ЧАСТЬ:**\n"
-        message += f"{current_arc['title']}\n"
-        message += f"Время проведения: {current_arc['start_date'].strftime('%d.%m.%Y')} - {current_arc['end_date'].strftime('%d.%m.%Y')}\n"
-        message += f"Стомсость полного доступа: {current_arc['price']}₽\n"
-        message += f"Стоимость пробного достута: 100₽\n"
-        message += f"• Включает в себя доступ к трем первым заданиям активной части тренинга, обратную связь от психологаа выполненные задания и доступ к сообществу\n\n"
-    
-    # Показываем будущие части
-    future_arcs = [a for a in detailed_arcs if a['status'] == 'будущая']
-    if future_arcs:
-        message += f"**⏳ БУДУЩИЕ ЧАСТИ:**\n"
-        for arc in future_arcs[:7]:
-            message += f"• {arc['title']} - начнётся {arc['start_date'].strftime('%d.%m.%Y')}\n"
-        message += f"\n"
-    
-    # Показываем прошедшие части
-    past_arcs = [a for a in detailed_arcs if a['status'] == 'прошедшая']
-    if past_arcs:
-        message += f"**📜 АРХИВ (прошедшие части):**\n"
-        message += f"• Доступ ко всем заданиям сразу\n"
-        message += f"• Изучайте в удобном темпе\n\n"
-    
-    message += "💡 **Пробный доступ доступен только для текущей части!**\n"
-    message += "**Выберите часть для покупки:**\n"
     
     await update.message.reply_text(
         message,
         reply_markup=reply_markup,
         parse_mode='Markdown'
     )
+    
+    # Сохраняем информацию о дугах
+    context.user_data['available_arcs'] = {
+        'current': current_arcs,
+        'future': future_arcs,
+    }
 
 async def contact_psychologist(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Переход к психологу с inline-кнопкой"""
@@ -2974,11 +3169,17 @@ def get_current_arc():
     try:
         from datetime import datetime
         today = datetime.now().date().isoformat()
+        print(f"🔍 Поиск текущей части на дату: {today}")
         
+        # Ищем часть с датами, включающими сегодня
         cursor.execute('''
             SELECT arc_id, title 
             FROM arcs 
             WHERE arc_id > 0
+            AND дата_начала IS NOT NULL 
+            AND дата_начала != ''
+            AND дата_окончания IS NOT NULL 
+            AND дата_окончания != ''
             AND DATE(дата_начала) <= DATE(?)
             AND DATE(дата_окончания) >= DATE(?)
             ORDER BY arc_id
@@ -2987,18 +3188,23 @@ def get_current_arc():
         
         current = cursor.fetchone()
         
-        if not current:
+        if current:
+            print(f"✅ Найдена текущая часть: {current[1]} (ID: {current[0]})")
+        else:
+            print(f"⚠️ Текущая часть не найдена для даты {today}")
+            # Покажем какие части есть
             cursor.execute('''
-                SELECT arc_id, title, дата_начала
+                SELECT arc_id, title, дата_начала, дата_окончания 
                 FROM arcs 
                 WHERE arc_id > 0 
-                AND дата_начала > DATE(?)
+                AND дата_начала IS NOT NULL
                 ORDER BY дата_начала
-                LIMIT 1
-            ''', (today,))
-            next_arc = cursor.fetchone()
-            if next_arc:
-                print(f"🔍 Следующая часть тренинга: {next_arc[1]} начнется {next_arc[2]}")
+            ''')
+            all_arcs = cursor.fetchall()
+            
+            print(f"📋 Все части в БД:")
+            for arc in all_arcs:
+                print(f"  • {arc[1]} (ID:{arc[0]}) - {arc[2]} / {arc[3]}")
         
         return current
     
@@ -3176,29 +3382,23 @@ async def show_statistics(update: Update, context: ContextTypes.DEFAULT_TYPE):
             'start_date': start_date
         }
     
-    keyboard.append(["🔙 В раздел Мои задания"])
+    keyboard.append(["📚 Мои задания"])
     
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     
     # Формируем сообщение
     message = "📊 **МОЙ ПРОГРЕСС**\n\n"
-    message += "Выберите часть для просмотра статистики:\n\n"
+    message += "Выберите марафон(дату) для просмотра статистики:\n\n"
     
     # Добавляем пояснение по статусам
     message += "**Обозначения:**\n"
-    message += "• 🔄 - часть идёт сейчас\n"
-    message += "• ⏳ - часть начнётся в будущем\n"
-    message += "• ✅ - часть завершена\n\n"
+    message += "• 🔄 - Марафон идёт сейчас\n"
+    message += "• ✅ - Марафон завершен\n\n"
     
     # Краткая сводка по всем частям
     active_count = sum(1 for _, _, _, _, status in user_arcs if status == 'active')
     future_count = sum(1 for _, _, _, _, status in user_arcs if status == 'future')
     past_count = sum(1 for _, _, _, _, status in user_arcs if status == 'past')
-    
-    message += f"📈 **Ваши части:**\n"
-    message += f"• 🔄 Активные: {active_count}\n"
-    message += f"• ⏳ Будущие: {future_count}\n"
-    message += f"• ✅ Завершённые: {past_count}\n"
     
     await update.message.reply_text(
         message,
@@ -3208,7 +3408,7 @@ async def show_statistics(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def show_arc_statistics(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показывает статистику по выбранной части"""
+    """Показывает статистику по выбранной части - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
     user_id = update.message.from_user.id
     text = update.message.text
     
@@ -3225,93 +3425,181 @@ async def show_arc_statistics(update: Update, context: ContextTypes.DEFAULT_TYPE
     status = arc_info['status']
     start_date = arc_info['start_date']
     
-    from database import get_user_skip_statistics, get_current_arc_day
+    # ★★★ ДОБАВЬТЕ ПРАВИЛЬНОЕ ОПРЕДЕЛЕНИЕ СТАТУСА:
+    from datetime import datetime
     
-    # Получаем статистику пропусков
-    stats = get_user_skip_statistics(user_id, arc_id)
+    try:
+        # Парсим дату начала
+        if isinstance(start_date, str):
+            if ' ' in start_date:
+                start_date_obj = datetime.strptime(start_date, '%Y-%m-%d %H:%M:%S').date()
+            else:
+                start_date_obj = datetime.strptime(start_date, '%Y-%m-%d').date()
+        else:
+            start_date_obj = start_date
+        
+        today = datetime.now().date()
+        
+        # Получаем дату окончания из БД
+        conn = sqlite3.connect('mentor_bot.db')
+        cursor = conn.cursor()
+        cursor.execute('SELECT дата_окончания FROM arcs WHERE arc_id = ?', (arc_id,))
+        end_date_result = cursor.fetchone()
+        conn.close()
+        
+        end_date_str = end_date_result[0] if end_date_result else None
+        
+        if end_date_str:
+            if isinstance(end_date_str, str):
+                if ' ' in end_date_str:
+                    end_date_obj = datetime.strptime(end_date_str, '%Y-%m-%d %H:%M:%S').date()
+                else:
+                    end_date_obj = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+            else:
+                end_date_obj = end_date_str
+            
+            # Правильное определение статуса
+            if today < start_date_obj:
+                status = 'future'
+            elif start_date_obj <= today <= end_date_obj:
+                status = 'active'
+            else:
+                status = 'past'
+        else:
+            status = 'future'  # Если нет даты окончания
+            
+    except Exception as e:
+        print(f"🚨 Ошибка определения статуса части: {e}")
+        status = arc_info.get('status', 'unknown')
+    
+    # Теперь используем ПРАВИЛЬНЫЙ статус
+    message = f"📊 **СТАТИСТИКА: {arc_title}**\n\n"
+    
+    if status == 'active':
+        message += f"🔄 **Статус:** Часть идёт сейчас\n"
+    
+    stats = None
+    try:
+        # Альтернатива: вызываем через существующий импорт в начале файла
+        from database import get_user_skip_statistics
+        stats = get_user_skip_statistics(user_id, arc_id)
+    except Exception as e:
+        print(f"⚠️ Ошибка получения статистики: {e}")
+        stats = {
+            'total_days': 0,
+            'completed_days': 0,
+            'skipped_days': 0,
+            'streak_days': 0,
+            'completion_rate': 0,
+            'completed_assignments': 0,
+            'skipped_assignments': 0,
+            'skipped_list': [],
+            'skipped_days_list': []
+        }
     
     # Получаем текущий день для активной части
     current_day_info = None
     if status == 'active':
-        current_day_info = get_current_arc_day(user_id, arc_id)
+        try:
+            from database import get_current_arc_day
+            current_day_info = get_current_arc_day(user_id, arc_id)
+        except Exception as e:
+            print(f"⚠️ Ошибка получения текущего дня: {e}")
+            current_day_info = None
     
     # Формируем сообщение
-    message = f"📊 **СТАТИСТИКА: {arc_title}**\n\n"
+    message = f"📊 **МОЙ ПРОГРЕСС: {arc_title}**\n\n"
     
     # Информация о статусе части
     if status == 'active':
-        message += f"🔄 **Статус:** Часть идёт сейчас\n"
-        if current_day_info:
-            message += f"📅 **Текущий день:** {current_day_info['day_number']} из 28\n"
+        message += f"Основные показатели:\n"
+        if current_day_info and 'day_number' in current_day_info:
+            message += f"**Текущий день:** {current_day_info['day_number']} из 28\n"
     elif status == 'future':
-        message += f"⏳ **Статус:** Начнётся {start_date}\n"
+        message += f"**Статус:** Начнётся {start_date}\n"
     else:
-        message += f"✅ **Статус:** Часть завершена\n"
+        message += f"**Статус:** Марафон завершена\n"
     
-    message += f"📅 **Дата начала:** {start_date}\n\n"
+    message += f"**Дата начала:** {start_date}\n\n"
     
     # Статистика выполнения (только для активных и завершенных частей)
     if status in ['active', 'past'] and stats:
-        total_days = stats.get('total_days', 0)
-        completed_days = stats.get('completed_days', 0)
-        skipped_days = stats.get('skipped_days', 0)
+        # ★ БЕЗОПАСНЫЙ ДОСТУП К ДАННЫМ
+        completed_assignments = stats.get('completed_assignments', 0)
+        skipped_assignments = stats.get('skipped_assignments', 0)
+        skipped_list = stats.get('skipped_list', [])
         streak_days = stats.get('streak_days', 0)
         completion_rate = stats.get('completion_rate', 0)
-        
-        message += "📈 **СТАТИСТИКА ВЫПОЛНЕНИЯ**\n"
-        message += f"• 📅 Всего дней в части: {total_days}\n"
-        message += f"• ✅ Выполнено дней: {completed_days}\n"
-        message += f"• ❌ Пропущено дней: {skipped_days}\n"
-        message += f"• 📊 Процент выполнения: {completion_rate}%\n"
+
+        message += "**Статистика заданий:**\n"
+        message += f"• **Всего:** 28 заданий\n"
+        message += f"• **Выполнено:** {completed_assignments}\n"
+        message += f"• Процент выполнения: {completion_rate}%\n"
+
+        # Пропущенные задания
+        if skipped_assignments > 0 and skipped_list:
+            message += f"📋 **Пропущенные задания:**\n"
+            for i, skipped in enumerate(skipped_list[:10], 1):
+                # ★ БЕЗОПАСНЫЙ ДОСТУП К assignment
+                assignment_name = skipped.get('assignment', f'Задание {i}')
+                message += f"{assignment_name}\n"
+            
+            if skipped_assignments > 10:
+                message += f"... и еще {skipped_assignments - 10} заданий\n"
+        else:
+            message += "**• Пропущенных заданий нет!**\n"
         
         if streak_days > 0:
-            message += f"• 🔥 Серия выполнения: {streak_days} дней подряд\n"
+            message += f"• Серия выполнения: {streak_days} дней подряд\n"
         
         message += "\n"
         
-        # Пропущенные дни (первые 5)
-        skipped_list = stats.get('skipped_days_list', [])
-        if skipped_list:
+        # Пропущенные дни
+        skipped_days_list = stats.get('skipped_days_list', [])
+        if skipped_days_list:
             message += "📋 **Пропущенные дни:**\n"
-            for day_title in skipped_list[:5]:
+            for day_title in skipped_days_list[:5]:
                 message += f"• {day_title}\n"
-            if len(skipped_list) > 5:
-                message += f"• ... и ещё {len(skipped_list) - 5} дней\n"
+            if len(skipped_days_list) > 5:
+                message += f"• ... и ещё {len(skipped_days_list) - 5} дней\n"
             message += "\n"
     
     # Статистика по заданиям (если часть активна или завершена)
     if status in ['active', 'past']:
-        conn = sqlite3.connect('mentor_bot.db')
-        cursor = conn.cursor()
-        
-        # Считаем задания
-        cursor.execute('''
-            SELECT 
-                COUNT(DISTINCT a.assignment_id) as total_assignments,
-                SUM(CASE WHEN upa.status IN ('submitted', 'approved') THEN 1 ELSE 0 END) as completed_assignments,
-                SUM(CASE WHEN upa.status = 'submitted' THEN 1 ELSE 0 END) as in_progress_assignments,
-                SUM(CASE WHEN upa.status = 'approved' THEN 1 ELSE 0 END) as approved_assignments
-            FROM assignments a
-            JOIN days d ON a.day_id = d.day_id
-            LEFT JOIN user_progress_advanced upa ON a.assignment_id = upa.assignment_id AND upa.user_id = ?
-            WHERE d.arc_id = ?
-        ''', (user_id, arc_id))
-        
-        result = cursor.fetchone()
-        conn.close()
-        
-        if result:
-            total_assignments, completed, in_progress, approved = result
+        conn = None
+        try:
+            conn = sqlite3.connect('mentor_bot.db')
+            cursor = conn.cursor()
             
-            if total_assignments > 0:
-                completion_percent = int((completed / total_assignments) * 100) if total_assignments > 0 else 0
-                
-                message += "📝 **СТАТИСТИКА ПО ЗАДАНИЯМ**\n"
-                message += f"• 📋 Всего заданий: {total_assignments}\n"
-                message += f"• ✅ Выполнено: {completed} ({completion_percent}%)\n"
-                if in_progress > 0:
-                    message += f"• 🟡 На проверке: {in_progress}\n"
-                message += f"• 💬 Проверено психологом: {approved}\n\n"
+            # Считаем задания
+            cursor.execute('''
+                SELECT 
+                    COUNT(DISTINCT a.assignment_id) as total_assignments,
+                    SUM(CASE WHEN upa.status IN ('submitted', 'approved') THEN 1 ELSE 0 END) as completed_assignments,
+                    SUM(CASE WHEN upa.status = 'submitted' THEN 1 ELSE 0 END) as in_progress_assignments,
+                    SUM(CASE WHEN upa.status = 'approved' THEN 1 ELSE 0 END) as approved_assignments
+                FROM assignments a
+                JOIN days d ON a.day_id = d.day_id
+                LEFT JOIN user_progress_advanced upa ON a.assignment_id = upa.assignment_id AND upa.user_id = ?
+                WHERE d.arc_id = ?
+            ''', (user_id, arc_id))
+            
+            result = cursor.fetchone()
+            
+            if result:
+                total_assignments, completed, in_progress, approved = result
+                if total_assignments and total_assignments > 0:
+                    completion_percent = int((completed / total_assignments) * 100) if completed else 0
+                    
+                    message += "**Дополнительная статистика:**\n"
+                    message += f"• На проверке: {in_progress or 0}\n"
+                    message += f"• Проверено: {approved or 0}\n\n"
+                    
+        except Exception as e:
+            print(f"⚠️ Ошибка SQL запроса в статистике: {e}")
+        finally:
+            if conn:
+                conn.close()
     
     # Рекомендации в зависимости от статуса
     if status == 'future':
@@ -3340,11 +3628,21 @@ async def show_arc_statistics(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     
-    await update.message.reply_text(
-        message,
-        reply_markup=reply_markup,
-        parse_mode='Markdown'
-    )
+    # ★ БЕЗОПАСНАЯ ОТПРАВКА
+    try:
+        await update.message.reply_text(
+            message,
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
+        )
+    except Exception as e:
+        print(f"🚨 Ошибка отправки сообщения со статистикой: {e}")
+        # Альтернатива без форматирования
+        safe_message = message.replace('*', '').replace('_', '')
+        await update.message.reply_text(
+            safe_message[:4000],
+            reply_markup=reply_markup
+        )
 
 async def manage_access(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Управление доступом - список пользователей"""
@@ -3716,93 +4014,6 @@ async def show_users_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-async def show_admin_user_statistics(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показывает меню выбора части для просмотра статистики пользователя (админ)"""
-    text = update.message.text
-    
-    user_mapping = context.user_data.get('admin_stats_users', {})
-    user_info = user_mapping.get(text)
-    
-    if not user_info:
-        await update.message.reply_text("❌ Пользователь не найден")
-        return
-    
-    user_id = user_info['user_id']
-    display_name = user_info['display_name']
-    
-    # Получаем части пользователя
-    conn = sqlite3.connect('mentor_bot.db')
-    cursor = conn.cursor()
-    
-    cursor.execute('''
-        SELECT DISTINCT a.arc_id, a.title, a.дата_начала, a.дата_окончания,
-               CASE 
-                   WHEN DATE('now') < a.дата_начала THEN 'future'
-                   WHEN DATE('now') > a.дата_окончания THEN 'past' 
-                   ELSE 'active'
-               END as status
-        FROM user_arc_access uaa
-        JOIN arcs a ON uaa.arc_id = a.arc_id
-        WHERE uaa.user_id = ?
-        ORDER BY a.дата_начала DESC
-    ''', (user_id,))
-    
-    user_arcs = cursor.fetchall()
-    conn.close()
-    
-    if not user_arcs:
-        await update.message.reply_text(f"❌ У пользователя {display_name} нет доступа к частям")
-        return
-    
-    # Сохраняем данные пользователя
-    context.user_data['admin_current_user'] = {
-        'user_id': user_id,
-        'display_name': display_name
-    }
-    
-    # Формируем клавиатуру
-    keyboard = []
-    arc_mapping = {}
-    
-    for arc_id, arc_title, arc_start, arc_end, status in user_arcs:
-        # Определяем эмодзи
-        if status == 'active':
-            emoji = "🔄"
-        elif status == 'future':
-            emoji = "⏳"
-        else:
-            emoji = "✅"
-        
-        btn_text = f"{emoji} {arc_title}"
-        keyboard.append([btn_text])
-        
-        arc_mapping[btn_text] = {
-            'arc_id': arc_id,
-            'arc_title': arc_title,
-            'status': status
-        }
-    
-    keyboard.append(["👤 Выбрать другого участника"])
-    keyboard.append(["🔙 Назад к проверке"])
-    
-    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-    
-    context.user_data['admin_user_arcs_map'] = arc_mapping
-    
-    message = f"👤 **Статистика участника:** {display_name}\n\n"
-    message += "Выберите часть для просмотра статистики:\n\n"
-    message += "**Обозначения:**\n"
-    message += "• 🔄 - часть идёт сейчас\n"
-    message += "• ⏳ - часть начнётся в будущем\n"
-    message += "• ✅ - часть завершена\n"
-    
-    await update.message.reply_text(
-        message,
-        reply_markup=reply_markup,
-        parse_mode='Markdown'
-    )
-
-
 async def show_admin_arc_statistics(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показывает детальную статистику пользователя по выбранной части (админ)"""
     text = update.message.text
@@ -4065,7 +4276,7 @@ async def show_admin_user_statistics(update: Update, context: ContextTypes.DEFAU
     context.user_data['admin_user_arcs_map'] = arc_mapping
     
     message = f"👤 **Статистика участника:** {display_name}\n\n"
-    message += "Выберите часть для просмотра статистики:\n\n"
+    message += "Выберите марафон для просмотра статистики:\n\n"
     message += "**Обозначения:**\n"
     message += "• 🔄 - часть идёт сейчас\n"
     message += "• ⏳ - часть начнётся в будущем\n"
@@ -4415,63 +4626,17 @@ async def show_events(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Список мероприятий тренинга"""
 
     schedule_text = """
-психологический 
-поддерживающий
-тренинг
-"СЕБЯ ВЕРНИ СЕБЕ"
 
-В основе тренинга лежит
-научно доказательная психология.
+**📅 Расписание марафонов**
 
-1.Поведенческая Терапия 
-Когнитивно-Поведенческая Терапия. 
-Для работы с наблюдаемым поведением, привычками и дисфункциональными мыслями, которые их вызывают. Это обеспечивает конкретные, измеримые результаты.
+Раздел на доработке, информация скоро появится!
 
-2. Терапия Принятия и Ответственности.  
-Как современная ветвь поведенческой терапии, она идеально ложится в концепцию работы с намерением, принятием себя  своих результатов, и ценностно-ориентированным поведением.
-
-3. Образно Эмоциональная Терапия 
-Метод работы с бессознательным через образы и эмоции,
-включая техники работы с метафорическими образами,  для контакта
-с глубинными частями личности и ранним детским опытом.
-
-Тренинг состоит из восьми частей, 
-каждая часть состоит из сорока небольших заданий,
-для ежедневного выполнения и обратной связи по ним,
-с психологом, ведущим тренинг.
-
-Ежедневная поддержка, помощь, подсказки, техники, упражнения, комментарии к упражнениям, аудио и видео записи лекций, участие в закрытом сообществе тренинга,
-всё это для развития контакта с собой, самонаблюдения, 
-самопознания, обретения целостности.
-
-Тренинг формирует привычки самонаблюдения, 
-и передаёт инструменты для коррекции
-ежедневных повторяющихся, системных действий (привычек).
-
-Тренинг полезен для снятия тревоги, 
-преодоления прокрастинации, 
-Осознания своих возможностей, и целей.
-
-выбери раздел для детально изучения:
     """
     
-    keyboard = []
-    
-    event_names = [
-        "🎯 Часть первая: Самонаблюдение и намеренье",
-        "🎯 Часть вторая: Инвентаризация ресурсов", 
-        "🎯 Часть третья: Самонаблюдение в действиях",
-        "🎯 Часть четвёртая: Действие в группе",
-        "🎯 Часть пятая: Лидерство и власть",
-        "🎯 Часть шестая: Принятие результата",
-        "🎯 Часть седьмая: Осознание опыта",
-        "🎯 Часть восьмая: Интеграция частей"
+    keyboard = [
+        ["🔙 Назад к описанию марафона"],
+        ["🔙 В главное меню"]
     ]
-
-    for name in event_names:
-        keyboard.append([name])
-
-    keyboard.append(["🔙 Назад к описанию тренинга"])
     
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     
@@ -4482,55 +4647,21 @@ async def show_events(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def show_schedule(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Расписание всего тренинга"""
+    """Расписание всех марафона"""
+
+    schedule_text = """
+
+**📅 Расписание вебинаров**
+
+Раздел на доработке, информация скоро появится!
+
+    """
     
-    schedule_text = """🗓️ **РАСПИСАНИЕ СЕМИНАРОВ ТРЕНИНГА СЕБЯ ВЕРНИ СЕБЕ**
-
-• Двухдневные семинары поводятся перед каждой частью тренинга.
-• Семинар - психологический, поддерживающий.
-• Развиваем:
-Замедление, погружение, самонаблюдение.
-В мысли, чувства, процессы, связи.
-Трансформация восприятия себя и мира
-
-Даты семинаров:
-
-Семинар первый: Самонаблюдение и намеренье. 
-Даты проведения: 19 -21 декабря 2025
-место проведения:
-
-Семинар второй: Инвентаризация ресурсов.
-Даты проведения: 30 января - 1 февраля 2026
-Место проведения:
-
-Семинар третий: Самонаблюдение в действиях.
-Даты проведения: 20 -22 марта 2026
-Место проведения:
-
-Семинар четвертый: Действие в группе.
-Даты проведения: 1- 3 мая 2026
-Место проведения:
-
-Семинар пятый: Лидерство и власть.
-Даты проведения: 19- 21 июня 2026
-Место проведения:
-
-Семинар шестой: Принятие результата.
-Даты проведения: 31 июля - 2 августа 2026
-Место проведения:
-
-Семинар седьмой: Осознание опыта.
-Даты проведения: 25 - 27 сентября 2026
-Место проведения:
-
-Семинар восьмой: Интеграция частей.
-Даты проведения: 30 октября - 1 ноября 2026
-Место проведения:
-
-Информация на доработке 
-"""
-
-    keyboard = [["🔙 Назад к описанию тренинга"]]
+    keyboard = [
+        ["🔙 Назад к описанию марафона"],
+        ["🔙 В главное меню"]
+    ]
+    
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     
     await update.message.reply_text(
@@ -4609,7 +4740,7 @@ async def accept_service_offer_handler(update: Update, context: ContextTypes.DEF
     if pending_arc:
         # 3. Показываем сообщение с кнопкой
         keyboard = [[pending_arc]]
-        keyboard.append(["🔙 Назад к списку частей"])
+        keyboard.append(["🔙 Выбор марафона"])
         
         reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
         
@@ -4824,51 +4955,33 @@ async def show_today_assignments_info(update: Update, context: ContextTypes.DEFA
 
 async def show_quick_guide(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показывает краткое руководство по работе с заданиями"""
-    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
     
     guide_text = """📖 **КРАТКОЕ РУКОВОДСТВО ПО РАБОТЕ С ЗАДАНИЯМИ**
 
-🎯 **КАК РАБОТАТЬ С ЗАДАНИЯММИ:**
+🎯 **КАК РАБОТАТЬ С ЗАДАНИЯМИ:**
 1. **Ежедневно** в 06:00 открывается новый день и задания для него в разделе 'Доступные задания'
- • **Выберите задание** → выберите способ отправки ответа(только текст, только фото или текст+фото)
- • В зависимости от выбранного способа отправки ответа на задание зависит что будет прикреплено к заданию при отправке на проверку.
- • К ответу, при необходимости, можете **добавить комментарий** нажав на соответствующию кнопку.
- • Можете отправить несколько фотографий и несколько комментариев при необходимости, количество того, что прикрепит к итоговому ответу будет отображена.
-3. **Отправляете ответ** → психолог проверяет → дает обратную связь, которая появится в разделе 'Ответ психолога'
-4. После просмотра комментариев от психолога, задания переходят рараздел 'Завершенные', их можно просмотреть в любой момент, но изменить уже нельзя.
-5. Если вы пропустите день, то он останется доступен для выполнения, но вы потеряете 'серия без пропусков'(Указана в разделе 'Мои успехи')
+2. **Выберите задание** → выберите способ отправки ответа (только текст, только фото или текст+фото)
+   • В зависимости от выбранного способа отправки ответа на задание зависит что будет прикреплено к заданию при отправке на проверку.
+   • К ответу, при необходимости, можете **добавить комментарий** нажав на соответствующую кнопку.
+   • Можете отправить несколько фотографий и несколько комментариев при необходимости, количество того, что прикрепит к итоговому ответу будет отображена.
+3. **Отправляете ответ** → он сохранится и учтется в 'Мой прогресс'
+4. Выполненные задания можно просмотреть в любой момент, но изменить уже нельзя.
+5. Если вы пропустите день, то он останется доступен для выполнения, но вы потеряете 'серию без пропусков' в разделе 'Мой прогресс'
 
-🔔 **УВЕДОМЛЕНИЯ:**
-• на старте дня в 6:00 бот информирует вас о новых заданиях
-• За 2 часа до конца дня
-• За 1 час до конца дня
-• За 30 минут до конца дня
+❓ **ЕСТЬ ВОПРОСЫ по заданиям?**
+• В разделе 'Ответ психолога' в каждом задании есть возможность связаться с психологом, нажав на 👤 Личная консультация
+• В каждом задании при выполнении так же есть возможность связаться с психологом
+"""
 
-❓ **ЕСТЬ ВОПРОСЫ?**
-• 💬 Ответ психолога — психолог даст комментарий для всех ваших заданий. если у вас останутся вопросы сможете связаться с ним дополнительно
-• Разделе 'Ответ психолога' в каждом задании есть возможность связать с психологом, нажам на 👤 Личная консультация 
-
-**Какие ответы давать на задания?** давайте разберем подробно, нажмите на кнопку ниже"""
-
-
-    inline_keyboard = [[
-        InlineKeyboardButton("📚 Полное руководство",
-                           url="https://telegra.ph/Kak-pisat-otvety-v-treninge-rukovodstvo-12-17")
-    ]]
-    inline_markup = InlineKeyboardMarkup(inline_keyboard)
+    # Создаем клавиатуру для возврата
+    keyboard = [["📚 Мои задания"]]
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     
-    reply_keyboard = [["📚 В меню заданий"]]
-    reply_markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True)
-    
+    # Отправляем руководство
     await update.message.reply_text(
         guide_text,
-        reply_markup=inline_markup,
+        reply_markup=reply_markup,
         parse_mode='Markdown'
-    )
-    
-    await update.message.reply_text(
-        "Нажмите кнопку чтобы вернуться:",
-        reply_markup=reply_markup
     )
 
 async def start_photo_only_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -5756,6 +5869,9 @@ async def show_assignment_from_list(update: Update, context: ContextTypes.DEFAUL
     
     # Сохраняем day_id
     context.user_data['current_day_id'] = day_id
+
+    from database import get_assignment_media
+    media_data = get_assignment_media(assignment_id)
     
     # Показываем заголовок задания
     header = f"**📝 {assignment_title}**\n\n"
@@ -5763,6 +5879,16 @@ async def show_assignment_from_list(update: Update, context: ContextTypes.DEFAUL
         header += f"⏰ **Выполните задание до 0:00, иначе оно засчитается пропущенным\n\n"
 
     await update.message.reply_text(header, parse_mode='Markdown')
+
+    from database import get_assignment_media
+    media_data = None
+
+    try:
+        media_data = get_assignment_media(assignment_id)
+        print(f"🔍 Получены медиа для задания {assignment_id}: {media_data}")
+    except Exception as e:
+        print(f"⚠️ Ошибка получения медиа: {e}")
+        media_data = {'photos': [], 'audios': [], 'video_url': None}
 
     # Показываем текст задания (используем send_long_message для длинных текстов)
     if content_text:
@@ -5772,11 +5898,51 @@ async def show_assignment_from_list(update: Update, context: ContextTypes.DEFAUL
             prefix="📋 **Задание:**",
             parse_mode='Markdown'
         )
-    else:
-        await update.message.reply_text(
-            "📋 **Задание:**\n\nТекст задания отсутствует.",
-            parse_mode='Markdown'
-        )
+
+    # 2. Фото (если есть и не пустой список)
+    if media_data and media_data.get('photos'):
+        photos = media_data['photos']
+        if isinstance(photos, list) and photos:
+            for i, photo_id in enumerate(photos[:5], 1):
+                try:
+                    await update.message.reply_photo(
+                        photo=photo_id,
+                        caption=f"🖼️ Фото {i} к заданию"
+                    )
+                except Exception as e:
+                    print(f"🚨 Ошибка отправки фото {i}: {e}")
+
+    # 3. Аудио (если есть и не пустой список)
+    if media_data and media_data.get('audios'):
+        audios = media_data['audios']
+        if isinstance(audios, list) and audios:
+            for i, audio_id in enumerate(audios[:3], 1):
+                try:
+                    await update.message.reply_audio(
+                        audio=audio_id,
+                        caption=f"🎵 Аудио {i} к заданию"
+                    )
+                except Exception as e:
+                    print(f"🚨 Ошибка отправки аудио {i}: {e}")
+
+    # 4. Видео (ссылка, если есть и не пустая)
+    if media_data and media_data.get('video_url'):
+        video_url = media_data['video_url']
+        if video_url and video_url.strip():
+            # ПРОСТОЙ ТЕКСТ БЕЗ MARKDOWN
+            if 'youtube.com' in video_url or 'youtu.be' in video_url:
+                await update.message.reply_text(f"🎬 Видео к заданию:\n{video_url}")
+            elif video_url.startswith(('BAACAgI', 'CgACAgI', 'BAACAgQ', 'AgACAgI')):
+                try:
+                    await update.message.reply_video(
+                        video=video_url,
+                        caption="🎬 Видео к заданию"  # Простой текст
+                    )
+                except Exception as e:
+                    print(f"🚨 Ошибка отправки видео: {e}")
+                    await update.message.reply_text("🎬 Видео к заданию")
+            else:
+                await update.message.reply_text(f"🎬 Видео к заданию:\n{video_url}")
 
     # Показываем варианты ответа
     choice_message = "**📤 Выберите вариант ответа:**"
@@ -5853,9 +6019,9 @@ async def show_feedback_parts(update: Update, context: ContextTypes.DEFAULT_TYPE
     keyboard = []
     for arc_id, arc_title, new_count, total_count in arcs:
         if new_count > 0:
-            btn_text = f"📚 {arc_title} 🟡({new_count})"
+            btn_text = f"🏆 {arc_title} 🟡({new_count})"
         else:
-            btn_text = f"📚 {arc_title} ({total_count})"
+            btn_text = f"🏆 {arc_title} ({total_count})"
         keyboard.append([btn_text])
         
         # Сохраняем mapping
@@ -5866,42 +6032,32 @@ async def show_feedback_parts(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     await update.message.reply_text(
         "💬 **Ответ психолога**\n\n"
-        "Выберите часть:\n"
+        "Выберите марафон:\n"
         "🟡 - новые непросмотренные ответы",
         reply_markup=reply_markup,
         parse_mode='Markdown'
     )
 
 async def show_feedback_type(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показывает выбор типа ответов - ВСЕГДА ОБА ВАРИАНТА"""
+    """Показывает только завершенные задания"""
     user_id = update.message.from_user.id
     arc_text = update.message.text
     
-    print(f"🔍 show_feedback_type получен текст: '{arc_text}'")
-    
-    # 1. ОЧИЩАЕМ текст от эмодзи и счетчиков
     import re
     
-    # Убираем эмодзи 📚
-    clean_title = arc_text.replace("📚 ", "")
+    clean_title = arc_text.replace("🏆 ", "")
     
-    # Убираем 🟡(X) или (X)
-    clean_title = re.sub(r'\s*🟡\(\d+\)', '', clean_title)  # Убирает " 🟡(1)"
-    clean_title = re.sub(r'\s*\(\d+\)', '', clean_title)    # Убирает " (3)"
+    clean_title = re.sub(r'\s*🟡\(\d+\)', '', clean_title)
+    clean_title = re.sub(r'\s*\(\d+\)', '', clean_title)
     
     clean_title = clean_title.strip()
-    
-    print(f"🔍 Очищенное название: '{clean_title}'")
-    
-    # 2. ИЩЕМ часть в БД
+
     conn = sqlite3.connect('mentor_bot.db')
     cursor = conn.cursor()
     
-    # Вариант 1: Ищем точное совпадение
     cursor.execute('SELECT arc_id, title FROM arcs WHERE title = ?', (clean_title,))
     result = cursor.fetchone()
     
-    # Вариант 2: Если не нашли, ищем по номеру
     if not result and "Часть" in clean_title:
         match = re.search(r'Часть\s*(\d+)', clean_title)
         if match:
@@ -5910,10 +6066,8 @@ async def show_feedback_type(update: Update, context: ContextTypes.DEFAULT_TYPE)
             result = cursor.fetchone()
     
     if not result:
-        print(f"❌ Часть не найдена: '{clean_title}'")
         conn.close()
         
-        # Показываем какие части есть
         conn = sqlite3.connect('mentor_bot.db')
         cursor = conn.cursor()
         cursor.execute('SELECT arc_id, title FROM arcs WHERE arc_id > 0')
@@ -5930,53 +6084,42 @@ async def show_feedback_type(update: Update, context: ContextTypes.DEFAULT_TYPE)
     arc_id, arc_title = result
     conn.close()
     
-    print(f"✅ Найдена часть ID: {arc_id}, название: {arc_title}")
-    
-    # 3. СОХРАНЯЕМ в контекст
     context.user_data['current_feedback_arc'] = arc_id
     context.user_data['current_feedback_arc_title'] = arc_title
     context.user_data['current_section'] = 'feedback_type'
     
-    # 4. ПОДСЧИТЫВАЕМ количество ответов
     from database import get_feedback_counts
     new_count, completed_count = get_feedback_counts(user_id, arc_id)
     
-    print(f"📊 Статистика: новых={new_count}, завершенных={completed_count}")
-    
-    # 5. ФОРМИРУЕМ сообщение
     message = f"💬 **Ответы психолога**\n\n"
-    message += f"**Часть:** {arc_title}\n\n"
+    message += f"{arc_title}\n\n"
     
-    # Показываем статистику
-    if new_count == 0 and completed_count == 0:
-        message += "📭 **В этой части пока нет проверенных заданий.**\n\n"
+    # ⭐ ИЗМЕНЕНИЕ: показываем только завершенные
+    if completed_count == 0:
+        message += "📭 **В этой части пока нет завершенных заданий.**\n\n"
     else:
         message += f"📊 **Статистика ответов:**\n"
-        message += f"• 🟡 Новые ответы: {new_count}\n"
         message += f"• ✅ Завершенные задания: {completed_count}\n\n"
     
-    message += "**Выберите раздел:**"
+    message += "Выберите раздел:"
     
-    # 6. СОЗДАЕМ клавиатуру - ВСЕГДА ОБЕ КНОПКИ!
     keyboard = []
     
-    # 🔥 ВСЕГДА показываем обе кнопки, даже если count = 0
-    keyboard.append(["🟡 Новые ответы"])
+    # ⭐ ИЗМЕНЕНИЕ: убираем "🟡 Новые ответы", оставляем только завершенные
     keyboard.append(["✅ Завершенные задания"])
     
     keyboard.append(["🔙 Назад к частям"])
     
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     
-    # 7. ОТПРАВЛЯЕМ сообщение
     await update.message.reply_text(
         message,
         reply_markup=reply_markup,
         parse_mode='Markdown'
     )
 
-async def show_feedback_list(update: Update, context: ContextTypes.DEFAULT_TYPE, viewed=0):
-    """Показывает список заданий с ответами"""
+async def show_feedback_list(update: Update, context: ContextTypes.DEFAULT_TYPE, viewed=None):
+    """Показывает список завершенных заданий"""
     user_id = update.message.from_user.id
     arc_id = context.user_data.get('current_feedback_arc')
     arc_title = context.user_data.get('current_feedback_arc_title', f"Часть {arc_id}")
@@ -5985,10 +6128,10 @@ async def show_feedback_list(update: Update, context: ContextTypes.DEFAULT_TYPE,
         await update.message.reply_text("❌ Ошибка: часть не выбрана")
         return
     
-    # Получаем задания
     conn = sqlite3.connect('mentor_bot.db')
     cursor = conn.cursor()
     
+    # ⭐ ИЗМЕНЕНИЕ: всегда ищем только завершенные задания (viewed=1 или status='approved')
     cursor.execute('''
         SELECT a.title, d.title as day_title, d.order_num,
                upa.teacher_comment, upa.answer_text,
@@ -5998,28 +6141,21 @@ async def show_feedback_list(update: Update, context: ContextTypes.DEFAULT_TYPE,
         JOIN user_progress_advanced upa ON a.assignment_id = upa.assignment_id
         WHERE upa.user_id = ? 
           AND upa.status = 'approved'
-          AND upa.teacher_comment IS NOT NULL
-          AND upa.viewed_by_student = ?
           AND d.arc_id = ?
         ORDER BY d.order_num, a.assignment_id
-    ''', (user_id, viewed, arc_id))
+    ''', (user_id, arc_id))
     
     assignments = cursor.fetchall()
     conn.close()
     
-    # 🔥 ЕСЛИ НЕТ ЗАДАНИЙ - показываем сообщение и возвращаем
     if not assignments:
-        type_name = "новых ответов" if viewed == 0 else "завершенных заданий"
-        
         await update.message.reply_text(
-            f"📭 **Нет {type_name} в части '{arc_title}'.**\n\n"
-            f"Выберите другой раздел:",
+            f"📭 **Нет завершенных заданий в части '{arc_title}'.**\n\n"
+            f"После отправки задания оно сразу появится здесь.",
             parse_mode='Markdown'
         )
         
-        # Возвращаем к выбору типа
         keyboard = [
-            ["🟡 Новые ответы"],
             ["✅ Завершенные задания"],
             ["🔙 Назад к частям"]
         ]
@@ -6031,20 +6167,15 @@ async def show_feedback_list(update: Update, context: ContextTypes.DEFAULT_TYPE,
         )
         return
     
-    # Формируем сообщение
-    type_name = "🟡 НОВЫЕ ОТВЕТЫ" if viewed == 0 else "✅ ЗАВЕРШЕННЫЕ ЗАДАНИЯ"
-    message = f"**{type_name}**\n\n"
-    message += f"**Часть:** {arc_title}\n"
+    message = f"**✅ ЗАВЕРШЕННЫЕ ЗАДАНИЯ**\n\n"
+    message += f"{arc_title}\n"
     message += f"**Найдено:** {len(assignments)} заданий\n\n"
     
-    # Создаем клавиатуру с заданиями
     keyboard = []
     
-    for i, (assignment_title, day_title, day_num, comment, answer, assignment_id) in enumerate(assignments):
-        # Формируем текст кнопки
+    for i, (assignment_title, day_title, day_num, comment, answer, assignment_id) in enumerate(assignments[:15]):
         clean_title = assignment_title
         if assignment_title and " - " in assignment_title:
-            # Формат "День 4 - Задание 1" → "Задание 1"
             parts = assignment_title.split(" - ")
             if len(parts) == 2 and "День" in parts[0]:
                 clean_title = parts[1]
@@ -6052,7 +6183,6 @@ async def show_feedback_list(update: Update, context: ContextTypes.DEFAULT_TYPE,
         btn_text = f"📝 {clean_title}"
         keyboard.append([btn_text])
         
-        # Сохраняем mapping для быстрого доступа
         if 'feedback_assignments_map' not in context.user_data:
             context.user_data['feedback_assignments_map'] = {}
         context.user_data['feedback_assignments_map'][btn_text] = {
@@ -6060,10 +6190,9 @@ async def show_feedback_list(update: Update, context: ContextTypes.DEFAULT_TYPE,
             'assignment_title': assignment_title,
             'day_title': day_title,
             'day_num': day_num,
-            'viewed': viewed
+            'viewed': 1
         }
     
-    #keyboard.append(["🔙 Назад к выбору типа"])
     keyboard.append(["🔙 Назад к частям","🔙 В главное меню"])
     
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
@@ -6074,8 +6203,7 @@ async def show_feedback_list(update: Update, context: ContextTypes.DEFAULT_TYPE,
         parse_mode='Markdown'
     )
     
-    # Сохраняем текущий тип просмотра
-    context.user_data['current_feedback_viewed'] = viewed
+    context.user_data['current_feedback_viewed'] = 1
 
 async def show_feedback_assignment_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показывает детали ответа психолога на задание - ОБНОВЛЕННАЯ"""
@@ -6204,7 +6332,7 @@ async def show_training_catalog(update: Update, context: ContextTypes.DEFAULT_TY
     context.user_data['current_section'] = 'training_catalog'
     
     keyboard = [
-        ["📖 Всё о тренинге"],      # Существующая функция show_about_course
+        ["📖 Всё о марафоне"],      # Существующая функция show_about_course
         ["💰 Купить доступ"],    # Существующая функция show_course_main
         ["🔙 В главное меню"]
     ]
@@ -6272,144 +6400,165 @@ def get_current_and_future_arcs():
 async def buy_arc_from_catalog(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показывает информацию о части и предлагает купить (обновленная логика)"""
     user_id = update.message.from_user.id
-    arc_text = update.message.text
-
-    if 'pending_purchase_arc' in context.user_data and not update.message.text:
-        arc_text = context.user_data['pending_purchase_arc']
+    text = update.message.text
+    
+    print(f"🔍 buy_arc_from_catalog вызван с текстом: '{text}'")
+    
+    # Извлекаем название части из текста кнопки
+    # Новые форматы: 
+    # "🔄 Название (активный)", "⏳ Название (скоро начнётся)"
+    import re
+    
+    # Убираем эмодзи и статус в скобках
+    if " (активный)" in text:
+        clean_text = text.replace("🔄 ", "").replace(" (активный)", "").strip()
+        arc_status = "активный"
+    elif " (скоро начнётся)" in text:
+        clean_text = text.replace("⏳ ", "").replace(" (скоро начнётся)", "").strip()
+        arc_status = "скоро начнётся"
     else:
-        arc_text = update.message.text
-
-    # ========== ПРОВЕРКА ОФЕРТЫ УСЛУГ ==========
-    from database import get_user_service_offer_status
+        # Старый формат (на всякий случай)
+        clean_text = text.replace("🔄 ", "").replace("⏳ ", "").strip()
+        arc_status = None
     
-    # Сохраняем какую часть хочет купить пользователь (ВАЖНО!)
-    context.user_data['pending_purchase_arc'] = arc_text
+    print(f"🔍 Очищенное название: '{clean_text}'")
+    print(f"🔍 Статус: {arc_status}")
     
-    # Проверяем принял ли пользователь оферту услуг
-    service_offer_accepted = get_user_service_offer_status(user_id)
+    # Ищем часть в available_arcs
+    available_arcs = context.user_data.get('available_arcs', {})
+    selected_arc = None
     
-    if not service_offer_accepted:
-        # Логируем
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.info(f"🔍 show_service_offer_agreement: сохраняем arc '{arc_text}' для user {user_id}")
+    # Ищем во всех категориях
+    for category in ['current', 'future']:
+        arcs_list = available_arcs.get(category, [])
+        for arc in arcs_list:
+            if arc['title'] == clean_text:
+                selected_arc = arc
+                selected_arc['status'] = arc_status or arc.get('status', 'неизвестно')
+                print(f"✅ Найдена часть в {category}: {arc}")
+                break
+        if selected_arc:
+            break
+    
+    # Если не нашли в контексте, ищем в БД
+    if not selected_arc:
+        conn = sqlite3.connect('mentor_bot.db')
+        cursor = conn.cursor()
         
-        # Если оферта не принята - показываем ее
-        await show_service_offer_agreement(update, context)
-        return
-    
-    # Определяем часть и статус по иконке
-    if "🔄" in arc_text:
-        arc_title = arc_text.replace("🔄 ", "")
-        part_status = "текущая"
-    elif "⏳" in arc_text:
-        arc_title = arc_text.replace("⏳ ", "")
-        part_status = "будущая"
-    elif "📜" in arc_text:
-        arc_title = arc_text.replace("📜 ", "")
-        part_status = "прошедшая"
-    else:
-        arc_title = arc_text
-        part_status = "неизвестная"
-    
-    context.user_data['current_arc_catalog'] = arc_title
-    context.user_data['part_status'] = part_status
-    
-    conn = sqlite3.connect('mentor_bot.db')
-    cursor = conn.cursor()
-    
-    try:
-        cursor.execute('SELECT arc_id, price, дата_начала, дата_окончания FROM arcs WHERE title = ?', (arc_title,))
+        # Ищем точное совпадение
+        cursor.execute('''
+            SELECT arc_id, title, price, дата_начала, дата_окончания
+            FROM arcs 
+            WHERE title = ? 
+            AND дата_начала IS NOT NULL 
+            AND дата_окончания IS NOT NULL
+        ''', (clean_text,))
+        
         result = cursor.fetchone()
+        conn.close()
         
-        if not result:
-            await update.message.reply_text("❌ Часть не найдена")
-            return
-            
-        arc_id, arc_price, start_date, end_date = result
-        
-        # Конвертируем даты для отображения
-        if isinstance(start_date, str):
-            start_date_dt = datetime.fromisoformat(start_date).date()
-            start_date_str = start_date_dt.strftime('%d.%m.%Y')
-        else:
-            start_date_str = start_date.strftime('%d.%m.%Y') if hasattr(start_date, 'strftime') else str(start_date)
-        
-        if isinstance(end_date, str):
-            end_date_dt = datetime.fromisoformat(end_date).date()
-            end_date_str = end_date_dt.strftime('%d.%m.%Y')
-        else:
-            end_date_str = end_date.strftime('%d.%m.%Y') if hasattr(end_date, 'strftime') else str(end_date)
-        
-        # Проверяем, есть ли уже доступ
-        cursor.execute('SELECT 1 FROM user_arc_access WHERE user_id = ? AND arc_id = ?', (user_id, arc_id))
-        already_has = cursor.fetchone()
-        
-        keyboard = []
-        
-        if already_has:
-            # Если уже есть доступ
-            message = f"✅ **У вас уже есть доступ к этой части!**\n\n"
-            message += f"**{arc_title}**\n"
-            message += f"📅 {start_date_str} - {end_date_str}\n"
-            message += f"🎯 Статус: {part_status}\n\n"
-            message += "Переходите в раздел 'Мои задания' для обучения."
-            
-            keyboard.append(["📝 Доступные задания"])
-        else:
-            # Если нет доступа - предлагаем купить
-            message = f"**{arc_title}**\n\n"
-            message += f"📅 Период: {start_date_str} - {end_date_str}\n"
-            message += f"🎯 Статус: {part_status.upper()}\n"
-            message += f"📅 Длительность: 40 дней\n"
-            message += f"📝 Заданий: около 40\n\n"
-            
-            if part_status == "текущая":
-                message += f"💰 **Полный доступ:** {arc_price}₽\n"
-                message += f"• Доступ ко всем заданиям части\n"
-                message += f"• Проверка психологом\n"
-                message += f"• Доступ до окончания части\n\n"
-                
-                message += f"🎁 **Пробный доступ:** 100₽\n"
-                message += f"• Первые 3 задания\n"
-                message += f"• Можно купить в любой день\n"
-                message += f"• После 3 заданий - предложение полного доступа\n\n"
-                
-                keyboard.append(["💰 Купить полный доступ", "🎁 Пробный доступ (100₽)"])
-                
-            elif part_status == "будущая":
-                message += f"💰 **Предзаказ:** {arc_price}₽\n"
-                message += f"• Гарантированное место\n"
-                message += f"• Доступ откроется автоматически в день старта\n"
-                message += f"• Пробный доступ недоступен для будущих частей\n\n"
-                
-                keyboard.append(["💰 Купить заранее"])
-                
-            else:  # прошедшая
-                message += f"💰 **Архивный доступ:** {arc_price}₽\n"
-                message += f"• Все задания доступны сразу\n"
-                message += f"• Изучайте в удобном темпе\n"
-                message += f"• Проверка психологом (по запросу)\n\n"
-                
-                keyboard.append(["💰 Купить архив"])
-        
-        keyboard.append(["🔙 Назад к списку частей"])
-        reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-        
+        if result:
+            arc_id, title, price, start_date, end_date = result
+            selected_arc = {
+                'arc_id': arc_id,
+                'title': title,
+                'price': price,
+                'start_date': start_date,
+                'end_date': end_date,
+                'status': arc_status or 'неизвестно'
+            }
+            print(f"✅ Найдена часть в БД: {selected_arc}")
+    
+    if not selected_arc:
         await update.message.reply_text(
-            message,
-            reply_markup=reply_markup,
+            f"❌ **Марафон '{clean_text}' не найден.**\n\n"
+            f"Пожалуйста, вернитесь в каталог и выберите марафон заново.",
             parse_mode='Markdown'
         )
+        return
+    
+    # Сохраняем выбранную часть
+    context.user_data['current_arc_catalog'] = selected_arc['arc_id']
+    context.user_data['part_status'] = selected_arc['status']
+    
+    # Формируем сообщение
+    message = f"🎯 **{selected_arc['title']}**\n\n"
+    
+    if selected_arc['start_date'] and selected_arc['end_date']:
+        message += f"📅 **Даты проведения:**\n"
         
-        context.user_data['buy_arc_id'] = arc_id
-        context.user_data['buy_arc_price'] = arc_price
+        try:
+            # Функция для преобразования формата даты
+            def format_date(date_str):
+                if not date_str:
+                    return "не указана"
+                
+                # Если есть время - берем только дату
+                if ' ' in str(date_str):
+                    date_part = str(date_str).split()[0]
+                else:
+                    date_part = str(date_str)
+                
+                try:
+                    # Парсим дату из формата YYYY-MM-DD
+                    date_obj = datetime.strptime(date_part, '%Y-%m-%d')
+                    # Преобразуем в DD.MM.YYYY
+                    return date_obj.strftime('%d.%m.%Y')
+                except:
+                    # Если не удалось распарсить, возвращаем как есть
+                    return date_part
+            
+            start_formatted = format_date(selected_arc['start_date'])
+            end_formatted = format_date(selected_arc['end_date'])
+            
+            message += f"• Начало: {start_formatted}\n"
+            message += f"• Окончание: {end_formatted}\n\n"
+            
+        except Exception as e:
+            print(f"🚨 Ошибка форматирования даты: {e}")
+            message += f"• Начало: {selected_arc['start_date']}\n"
+            message += f"• Окончание: {selected_arc['end_date']}\n\n"
+    
+    message += f"💰 **Цена:** {selected_arc['price']}₽\n\n"
+    
+    # Описание в зависимости от статуса
+    if selected_arc['status'] == 'активный':
+        message += "🔄 **Этот марафон уже начался!**\n\n"
+        message += "• Вы можете присоединиться и начать выполнять задания.\n\n"
+        message += "• Вам будут доступны задания всех прошедших дней если вы начали не в день старта\n\n"
+        message += "• Важный момент: с окончанием марафона, доступ к заданиям закрывается, а статус марафона меняется на завершённый.\n"
         
-    except Exception as e:
-        await update.message.reply_text(f"❌ Ошибка: {str(e)}")
-    finally:
-        conn.close()
-
+        # Предлагаем пробный доступ для активного марафона
+        keyboard = [
+            ["💰 Купить полный доступ", "🎁 Пробный доступ(3 дня)"],
+            ["🔙 Назад к списку марафонов", "🔙 В главное меню"]
+        ]
+        
+    elif selected_arc['status'] == 'скоро начнётся':
+        message += "⏳ **Этот марафон скоро начнётся.**\n"
+        message += "Вы можете зарегистрироваться заранее.\n\n"
+        
+        keyboard = [
+            ["💰 Купить доступ заранее"],
+            ["🔙 Назад к списку марафонов", "🔙 В главное меню"]
+        ]
+        
+    else:  # неизвестный статус
+        message += "❓ **Статус марафона неизвестен.**\n\n"
+        
+        keyboard = [
+            ["💰 Купить доступ"],
+            ["🔙 Назад к списку марафонов", "🔙 В главное меню"]
+        ]
+    
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    
+    await update.message.reply_text(
+        message,
+        reply_markup=reply_markup,
+        parse_mode='Markdown'
+    )
+    
 # Webhook обработчик для Юкассы
 async def yookassa_webhook(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик webhook от Юкассы"""
@@ -8029,14 +8178,14 @@ async def debug_last_payment(update: Update, context: ContextTypes.DEFAULT_TYPE)
         arc_title = cursor.fetchone()
         arc_title = arc_title[0] if arc_title else f"Часть {arc_id}"
         
-        message = f"💰 **Последний платеж:**\n\n"
+        message = f"**Последний платеж:**\n\n"
         message += f"ID: {pay_id}\n"
-        message += f"👤 User: {user_id_db}\n"
-        message += f"🔄 Часть: {arc_title}\n"
-        message += f"💵 Сумма: {amount}₽\n"
-        message += f"📊 Статус: {status}\n"
-        message += f"🔗 Юкасса ID: `{yookassa_id}`\n"
-        message += f"📅 Дата: {created_at}\n"
+        message += f"User: {user_id_db}\n"
+        message += f"{arc_title}\n"
+        message += f"Сумма: {amount}₽\n"
+        message += f"Статус: {status}\n"
+        message += f"Юкасса ID: `{yookassa_id}`\n"
+        message += f"Дата: {created_at}\n"
         
         # Проверяем есть ли доступ
         cursor.execute('SELECT 1 FROM user_arc_access WHERE user_id = ? AND arc_id = ?', (user_id_db, arc_id))
@@ -8094,7 +8243,7 @@ def send_payment_notification(user_id, arc_title, amount, payment_id):
         message = (
             f"✅ **Оплата подтверждена!**\n\n"
             f"Сумма: {amount}₽\n"
-            f"Часть: {arc_title}\n"
+            f"{arc_title}\n"
             f"Доступ: {access_type}\n"
             f"ID платежа: `{payment_id}`\n\n"
             f"Задания доступны в разделе **'Мои задания'**!"
@@ -8225,7 +8374,7 @@ async def tech_support_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         ["💬 Написать в поддержку"],
         ["📖 Инструкции"],  
-        ["👤 Автор тренинга"],
+        ["👤 Авторы марафона"],
         ["🔙 В главное меню"]
     ]
     
@@ -8243,7 +8392,7 @@ async def show_instructions(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     keyboard = [
         ["💬 Написать в поддержку"],
-        ["👤 Автор тренинга"],
+        ["👤 Авторы марафона"],
         ["🔙 В главное меню"]
     ]
     
@@ -8271,9 +8420,9 @@ async def show_author_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     
     await update.message.reply_text(
-        "👤 **Автор тренинга**\n\n"
+        "👤 **Авторы марафона**\n\n"
         "⚠️ *Раздел в разработке*\n\n"
-        "Скоро здесь появится информация об авторе "
+        "Скоро здесь появится информация об авторах"
         "и создателе тренинга «Себя верни себе».\n\n"
         "Для связи используйте кнопку ниже:",
         reply_markup=reply_markup,
@@ -8297,7 +8446,1279 @@ async def write_to_support(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=reply_markup,
         parse_mode='Markdown'
     )
+
+async def load_media_from_excel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Загружает медиа-контент из Excel"""
+    if not is_admin(update.message.from_user.id):
+        return
     
+    await update.message.reply_text("🔄 Загружаю медиа-контент из Excel...")
+    
+    from database import update_assignment_with_media_from_excel
+    count = update_assignment_with_media_from_excel()
+    
+    await update.message.reply_text(
+        f"✅ Загружено медиа для {count} заданий\n\n"
+        f"Теперь задания могут содержать:\n"
+        f"• 🖼️ Фото\n"
+        f"• 🎵 Аудио\n"
+        f"• 🎬 Видео-ссылки",
+        parse_mode='Markdown'
+    )
+
+async def load_media_simple(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Простая загрузка медиа из Excel"""
+    if not is_admin(update.message.from_user.id):
+        return
+    
+    await update.message.reply_text("🔄 Загружаю медиа из Excel (простой формат)...")
+    
+    from database import update_assignment_with_media_simple
+    count = update_assignment_with_media_simple()
+    
+    if count > 0:
+        # ПРОСТОЙ ТЕКСТ БЕЗ MARKDOWN
+        message = (
+            f"✅ Загружено фото для {count} заданий!\n\n"
+            f"Теперь медиа будут отображаться в заданиях.\n"
+            f"Проверьте: откройте любое задание с фото."
+        )
+        await update.message.reply_text(message)
+    else:
+        # ПРОСТОЙ ТЕКСТ БЕЗ MARKDOWN
+        message = (
+            "❌ Не удалось загрузить медиа.\n\n"
+            "Проверьте:\n"
+            "1. Файл courses_data.xlsx в папке с ботом\n"
+            "2. Колонка 'фото' в листе 'Задания'\n"
+            "3. File ID в ячейках (просто текст, без скобок)"
+        )
+        await update.message.reply_text(message)
+
+async def debug_current_arc(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает текущую активную часть"""
+    user_id = update.message.from_user.id
+    if not is_admin(user_id):
+        return
+    
+    from database import get_current_arc
+    current = get_current_arc()
+    
+    if current:
+        arc_id, arc_title = current
+        message = f"🔍 **Текущая активный марафон:**\n"
+        message += f"• ID: {arc_id}\n"
+        message += f"• Название: {arc_title}\n"
+        
+        # Проверяем доступ
+        conn = sqlite3.connect('mentor_bot.db')
+        cursor = conn.cursor()
+        cursor.execute('SELECT access_type FROM user_arc_access WHERE user_id = ? AND arc_id = ?', 
+                      (user_id, arc_id))
+        access = cursor.fetchone()
+        conn.close()
+        
+        message += f"• Ваш доступ: {'ЕСТЬ' if access else 'НЕТ'}\n"
+    else:
+        message = "❌ **Нет активных марафонов*\n\n"
+        
+        # Покажем все части
+        conn = sqlite3.connect('mentor_bot.db')
+        cursor = conn.cursor()
+        cursor.execute('SELECT arc_id, title, дата_начала, дата_окончания FROM arcs WHERE arc_id > 0')
+        all_arcs = cursor.fetchall()
+        conn.close()
+        
+        if all_arcs:
+            message += "📋 **Все части в БД:**\n"
+            for arc_id, title, start_date, end_date in all_arcs:
+                message += f"• {title} (ID:{arc_id}) - {start_date} / {end_date}\n"
+        else:
+            message += "В БД нет частей!"
+    
+    await update.message.reply_text(message, parse_mode='Markdown')
+
+async def grant_free_trial_access(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Выдает бесплатный пробный доступ на 3 дня"""
+    user_id = update.message.from_user.id
+    
+    # Получаем выбранный марафон
+    arc_id = context.user_data.get('current_arc_catalog')
+    part_status = context.user_data.get('part_status')
+    
+    if not arc_id:
+        await update.message.reply_text("❌ Сначала выберите марафон")
+        return
+    
+    # Проверяем что это активный марафон
+    if part_status != 'активный':
+        await update.message.reply_text(
+            "❌ **Пробный доступ доступен только для активных марафонов!**\n\n"
+            "Для будущих марафонов доступен только полный доступ.",
+            parse_mode='Markdown'
+        )
+        return
+    
+    # Выдаем бесплатный доступ
+    from database import grant_arc_access
+    grant_arc_access(user_id, arc_id, access_type='trial')
+
+    from telegram import ReplyKeyboardMarkup
+    
+    keyboard = [
+        ["📝 Доступные задания"],
+        ["🔙 В главное меню"]
+    ]
+    
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    
+    await update.message.reply_text(
+        "**Бесплатный пробный доступ активирован!**\n\n"
+        "**Что вы получили:**\n"
+        "• Доступ ко всем заданиям первых 3 дней марафона\n"
+        "• Доступ к заданиям открывается последовательно каждывй день\n"
+        "• Если вы присоединились на 3 день и позже, то вам сразу будут доступны задания 3 дней\n"
+        "• Это замечательня возможность оценить полезность марафона\n\n"
+        "**Что дальше:**\n"
+        "1. Перейдите в раздел '📝 Доступные задания'\n"
+        "2. Выполните доступные задания\n"
+        "3. Если понравится - купите полный доступ\n\n",
+        parse_mode='Markdown'
+    )
+
+async def get_file_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Простая команда - показывает инструкцию"""
+    user_id = update.message.from_user.id
+    
+    if not is_admin(user_id):
+        return
+    
+    # Сохраняем ID сообщения с инструкцией
+    message = await update.message.reply_text(
+        "📎 **ОТПРАВЬТЕ МНЕ ФОТО/АУДИО КАК ОТВЕТ НА ЭТО СООБЩЕНИЕ**\n\n"
+        "1. Нажмите и удерживайте это сообщение\n"
+        "2. Выберите 'Ответить' (Reply)\n"
+        "3. Отправьте фото или аудио файл\n"
+        "4. Я верну File ID\n\n"
+        "⚠️ Важно: отправляйте файл именно как ОТВЕТ на это сообщение!"
+    )
+    
+    # Сохраняем ID сообщения в context
+    context.user_data['getfileid_message_id'] = message.message_id
+
+
+async def cancel_file_id_mode(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Выйти из режима получения file_id"""
+    if 'waiting_for_file_id' in context.user_data:
+        context.user_data.pop('waiting_for_file_id', None)
+        await update.message.reply_text("✅ Режим получения File ID отменен.")
+    else:
+        await update.message.reply_text("⚠️ Режим получения File ID не активен.")
+
+
+async def get_file_id_easy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Самый простой работающий вариант"""
+    user_id = update.message.from_user.id
+    
+    if not is_admin(user_id):
+        return
+    
+    # Отправляем инструкцию с кнопкой "Просто отправьте файл"
+    await update.message.reply_text(
+        "📎 **Просто отправьте мне фото или аудио файл!**\n\n"
+        "Не нужно писать /getfileid в подписи.\n"
+        "Просто отправьте файл - я сам определю, что вы хотите получить File ID."
+    )
+
+async def handle_admin_files(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обрабатывает все файлы от админов"""
+    user_id = update.message.from_user.id
+    
+    if not is_admin(user_id):
+        return  # Не админ - пропускаем
+    
+    # Обрабатываем только если нет других активных режимов
+    if (not context.user_data.get('answering') and 
+        not context.user_data.get('notification_stage')):
+        
+        if update.message.photo:
+            file_id = update.message.photo[-1].file_id
+            await update.message.reply_text(
+                f"🖼 File ID фото:\n`{file_id}`\n\n"
+                f'📋 Для Excel (колонка "фото"):\n`{file_id}`',
+            )
+            return
+        
+        if update.message.audio:
+            file_id = update.message.audio.file_id
+            await update.message.reply_text(
+                f"🎵 File ID аудио:\n`{file_id}`\n\n"
+                f'📋 Для Excel (колонка "аудио"):\n`{file_id}`',
+            )
+            return
+        
+        if update.message.video:
+            file_id = update.message.video.file_id
+            duration = update.message.video.duration
+            file_size_mb = update.message.video.file_size / (1024*1024) if update.message.video.file_size else 0
+            
+            # ПРОСТОЙ ТЕКСТ БЕЗ MARKDOWN
+            message = (
+                f"🎬 File ID видео получен!\n\n"
+                f"🆔 Код: {file_id}\n"
+                f"⏱ Длительность: {duration} секунд\n"
+                f"📏 Размер: {file_size_mb:.1f} MB\n\n"
+                f"📋 Для Excel (колонка 'видео_ссылка'):\n{file_id}\n\n"
+                f"✅ Видео будет показываться прямо в Telegram!"
+            )
+            
+            await update.message.reply_text(message)  # БЕЗ parse_mode='Markdown'
+            return
+                
+        if update.message.document:
+            file_id = update.message.document.file_id
+            file_name = update.message.document.file_name or "Документ"
+            
+            await update.message.reply_text(
+                f"📄 File ID документа:\n`{file_id}`\n\n"
+                f"📝 Название: {file_name}\n\n"
+                f'📋 Для Excel:\n`{file_id}`',
+            )
+            return
+
+async def check_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Проверить медиа в базе данных"""
+    if not is_admin(update.message.from_user.id):
+        return
+    
+    conn = sqlite3.connect('mentor_bot.db')
+    cursor = conn.cursor()
+    
+    # Проверяем первое задание
+    cursor.execute('''
+        SELECT assignment_id, title, content_photos, content_audios, video_url
+        FROM assignments 
+        WHERE assignment_id = 1
+    ''')
+    
+    result = cursor.fetchone()
+    conn.close()
+    
+    if result:
+        assignment_id, title, photos_json, audios_json, video_url = result
+        
+        message = f"🔍 **Задание {assignment_id}: {title}**\n\n"
+        
+        if photos_json:
+            try:
+                photos = json.loads(photos_json)
+                message += f"🖼️ **Фото:** {len(photos)} шт.\n"
+                for i, photo_id in enumerate(photos[:3], 1):
+                    message += f"  {i}. `{photo_id[:30]}...`\n"
+            except:
+                message += f"🖼️ **Фото (RAW):** `{photos_json[:50]}...`\n"
+        else:
+            message += "🖼️ **Фото:** нет\n"
+        
+        message += f"\n📏 Длина данных фото: {len(photos_json) if photos_json else 0} символов"
+        
+        await update.message.reply_text(message, parse_mode='Markdown')
+    else:
+        await update.message.reply_text("❌ Задание не найдено")
+
+async def add_photo_to_assignment(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Добавить фото к заданию напрямую"""
+    if not is_admin(update.message.from_user.id):
+        return
+    
+    # Формат: /addphoto 1 file_id_here
+    if context.args and len(context.args) >= 2:
+        try:
+            assignment_id = int(context.args[0])
+            file_id = context.args[1]
+            
+            # Формируем JSON
+            photos_json = json.dumps([file_id])
+            
+            conn = sqlite3.connect('mentor_bot.db')
+            cursor = conn.cursor()
+            
+            # Проверяем существует ли задание
+            cursor.execute('SELECT title FROM assignments WHERE assignment_id = ?', (assignment_id,))
+            if cursor.fetchone():
+                # Обновляем
+                cursor.execute('''
+                    UPDATE assignments 
+                    SET content_photos = ?
+                    WHERE assignment_id = ?
+                ''', (photos_json, assignment_id))
+                
+                conn.commit()
+                
+                await update.message.reply_text(
+                    f"✅ **Фото добавлено к заданию {assignment_id}!**\n\n"
+                    f"📸 File ID: `{file_id}`\n"
+                    f"📋 JSON: {photos_json}\n\n"
+                    f"Теперь откройте задание как пользователь для проверки.",
+                    parse_mode='Markdown'
+                )
+            else:
+                await update.message.reply_text(f"❌ Задание {assignment_id} не найдено")
+            
+            conn.close()
+            
+        except Exception as e:
+            await update.message.reply_text(f"❌ Ошибка: {e}")
+    
+    elif update.message.photo and len(context.args) == 1:
+        # Если отправлено фото + ID задания
+        try:
+            assignment_id = int(context.args[0])
+            file_id = update.message.photo[-1].file_id
+            photos_json = json.dumps([file_id])
+            
+            conn = sqlite3.connect('mentor_bot.db')
+            cursor = conn.cursor()
+            
+            cursor.execute('UPDATE assignments SET content_photos = ? WHERE assignment_id = ?', 
+                          (photos_json, assignment_id))
+            
+            conn.commit()
+            conn.close()
+            
+            await update.message.reply_text(
+                f"✅ **Фото добавлено!**\n\n"
+                f"📝 Задание: {assignment_id}\n"
+                f"🖼️ File ID: `{file_id}`\n\n"
+                f"Теперь проверьте: откройте задание {assignment_id} как пользователь.",
+                parse_mode='Markdown'
+            )
+            
+        except Exception as e:
+            await update.message.reply_text(f"❌ Ошибка: {e}")
+    
+    else:
+        await update.message.reply_text(
+            "📝 **Использование:**\n\n"
+            "**Способ 1:**\n"
+            "`/addphoto <ID_задания> <file_id>`\n\n"
+            "**Способ 2:**\n"
+            "1. Напишите `/addphoto <ID_задания>`\n"
+            "2. Отправьте фото как ответ на это сообщение\n\n"
+            "**Пример:** `/addphoto 1 AgACAgIAAxkBAAIJuml7o8cOswb-rXwZCAuL8P2vQEZcAAIJE2sbbOrZS8KL5JWUSu69AQADAgADeQADOAQ`"
+        )
+
+async def load_all_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Загрузить ВСЕ медиа из Excel (фото, аудио, видео)"""
+    if not is_admin(update.message.from_user.id):
+        return
+    
+    await update.message.reply_text("🔄 Загружаю ВСЕ медиа из Excel...")
+    
+    from database import load_all_media_from_excel
+    result = load_all_media_from_excel()
+    
+    if result['status'] == 'success':
+        stats = result['stats']
+        
+        # ПРОСТОЙ ТЕКСТ БЕЗ MARKDOWN
+        message = (
+            f"✅ ВСЕ МЕДИА ЗАГРУЖЕНЫ УСПЕШНО!\n\n"
+            f"📊 Статистика:\n"
+            f"• 📝 Обработано строк: {stats['total_rows']}\n"
+            f"• ✅ Обновлено заданий: {stats['updated_assignments']}\n"
+            f"• 🖼️ Загружено фото: {stats['photos_loaded']}\n"
+            f"• 🎵 Загружено аудио: {stats['audios_loaded']}\n"
+            f"• 🎬 Загружено видео: {stats['videos_loaded']}\n"
+            f"• ❌ Ошибок: {stats['errors']}\n\n"
+            f"Теперь в заданиях будут отображаться:\n"
+            f"• Фото\n• Аудио\n• Видео-ссылки"
+        )
+        
+        await update.message.reply_text(message)  # Без parse_mode
+    
+    else:
+        message = (
+            f"❌ Ошибка загрузки медиа!\n\n"
+            f"Проблема: {result['message']}\n\n"
+            f"Проверьте:\n"
+            f"1. Файл courses_data.xlsx в папке с ботом\n"
+            f"2. Лист 'Задания' в файле\n"
+            f"3. Колонки: 'фото', 'аудио', 'видео_ссылка'\n"
+            f"4. Формат данных: просто file_id или URL"
+        )
+        
+        await update.message.reply_text(message)
+
+async def load_tests_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда для загрузки тестов из Excel (только админ)"""
+    if not is_admin(update.message.from_user.id):
+        return
+    
+    await update.message.reply_text("🔄 Загружаю тесты из Excel...")
+    
+    from database import load_tests_from_excel
+    count = load_tests_from_excel()
+    
+    await update.message.reply_text(
+        f"✅ Загружено {count} вопросов для тестов\n\n"
+        f"Теперь доступны:\n"
+        f"• 📈 Тестирование по неделям\n"
+        f"• 📊 Сохранение результатов\n"
+        f"• 🔄 Прогресс прохождения",
+        parse_mode='Markdown'
+    )
+
+
+# ==================== ТЕСТИРОВАНИЕ ====================
+
+async def testing_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Главное меню тестирования"""
+    context.user_data['current_section'] = 'testing'
+    user_id = update.message.from_user.id
+    
+    # Проверяем есть ли активные марафоны
+    from database import get_user_active_arcs
+    active_arcs = get_user_active_arcs(user_id)
+    
+    if not active_arcs:
+        await update.message.reply_text(
+            "📈 **Тестирование**\n\n"
+            "У вас нет активных марафонов.\n"
+            "Тесты доступны только во время прохождения марафонов.",
+            parse_mode='Markdown',
+            reply_markup=ReplyKeyboardMarkup([["🔙 В главное меню"]], resize_keyboard=True)
+        )
+        return
+    
+    keyboard = [
+        ["📈 Пройти тест"],
+        ["📊 Мои результаты"],
+        ["📚 В раздел Мои задания"]
+    ]
+    
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    
+    await update.message.reply_text(
+        "📈 **ТЕСТИРОВАНИЕ**\n\n"
+        "Еженедельные тесты для закрепления материала:\n\n"
+        "• **Неделя 1** - дни 1-7\n"
+        "• **Неделя 2** - дни 8-14\n"
+        "• **Неделя 3** - дни 15-21\n"
+        "• **Неделя 4** - дни 22-28\n\n"
+        "Каждый тест: 15 вопросов, 5 вариантов ответа.",
+        reply_markup=reply_markup,
+        parse_mode='Markdown'
+    )
+
+async def show_available_tests(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает выбор марафона для тестирования"""
+    user_id = update.message.from_user.id
+    
+    # Получаем активные марафоны
+    from database import get_user_active_arcs
+    active_arcs = get_user_active_arcs(user_id)
+    
+    if not active_arcs:
+        await update.message.reply_text(
+            "📭 **Нет активных марафонов.**\n\n"
+            "Тесты доступны только во время прохождения марафонов.",
+            parse_mode='Markdown',
+            reply_markup=ReplyKeyboardMarkup([["🔙 Назад к тестированию"]], resize_keyboard=True)
+        )
+        return
+    
+    keyboard = []
+    
+    for arc_id, arc_title, start_date, end_date, access_type in active_arcs:
+        # Форматируем даты
+        start_str = start_date.strftime('%d.%m') if hasattr(start_date, 'strftime') else str(start_date)[:10]
+        end_str = end_date.strftime('%d.%m') if hasattr(end_date, 'strftime') else str(end_date)[:10]
+        
+        btn_text = f"🏁 {arc_title}"
+        keyboard.append([btn_text])
+        
+        # Сохраняем маппинг
+        if 'arc_selection_map' not in context.user_data:
+            context.user_data['arc_selection_map'] = {}
+        context.user_data['arc_selection_map'][btn_text] = {
+            'arc_id': arc_id,
+            'arc_title': arc_title,
+            'start_date': start_date,
+            'end_date': end_date
+        }
+    
+    keyboard.append(["🔙 Назад к тестированию"])
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    
+    await update.message.reply_text(
+        "🏁 **ВЫБОР МАРАФОНА**\n\n"
+        "Выберите марафон для прохождения теста:",
+        reply_markup=reply_markup,
+        parse_mode='Markdown'
+    )
+
+async def show_tests_for_arc(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает доступные тесты для выбранного марафона"""
+    user_id = update.message.from_user.id
+    text = update.message.text
+    
+    # Получаем информацию о выбранном марафоне
+    arc_selection_map = context.user_data.get('arc_selection_map', {})
+    arc_info = arc_selection_map.get(text)
+    
+    if not arc_info:
+        # Может это прямой выбор теста (старая логика)?
+        if 'test_mapping' in context.user_data and text in context.user_data['test_mapping']:
+            await start_test(update, context)
+            return
+        
+        await update.message.reply_text("❌ Марафон не найден")
+        return
+    
+    arc_id = arc_info['arc_id']
+    arc_title = arc_info['arc_title']
+    
+    # Получаем доступные тесты для этого марафона
+    from database import get_available_tests, get_current_arc_day
+    available_tests = get_available_tests(user_id, arc_id)
+    
+    if not available_tests:
+        # Получаем текущий день для информативного сообщения
+        current_day_info = get_current_arc_day(user_id, arc_id)
+        current_day = current_day_info['day_number'] if current_day_info else 0
+        
+        await update.message.reply_text(
+            f"📭 **Нет доступных тестов в марафоне '{arc_title}'.**\n\n"
+            f"Ваш текущий день: {current_day}\n\n"
+            f"Тесты доступны по неделям:\n"
+            f"• Неделя 1: дни 1-7\n"
+            f"• Неделя 2: дни 8-14\n"
+            f"• Неделя 3: дни 15-21\n"
+            f"• Неделя 4: дни 22-28",
+            parse_mode='Markdown',
+            reply_markup=ReplyKeyboardMarkup([["🔙 Выбрать другой марафон"]], resize_keyboard=True)
+        )
+        return
+    
+    keyboard = []
+    
+    for test_info in available_tests:
+        week_num = test_info['week_num']
+        status = test_info['status']
+        completed = test_info['completed']
+        
+        if completed:
+            btn_text = f"✅ Неделя {week_num} (пройден)"
+        else:
+            btn_text = f"📈 Неделя {week_num} (доступен)"
+        
+        keyboard.append([btn_text])
+        
+        # Сохраняем маппинг теста с информацией о марафоне
+        if 'test_mapping' not in context.user_data:
+            context.user_data['test_mapping'] = {}
+        
+        context.user_data['test_mapping'][btn_text] = {
+            'arc_id': arc_id,
+            'arc_title': arc_title,
+            'week_num': week_num,
+            'completed': completed
+        }
+    
+    keyboard.append(["🔙 Выбрать другой марафон"])
+    keyboard.append(["🔙 Назад к тестированию"])
+    
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    
+    await update.message.reply_text(
+        f"📈 **ТЕСТЫ МАРАФОНА: {arc_title}**\n\n"
+        f"Выберите тест для прохождения:",
+        reply_markup=reply_markup,
+        parse_mode='Markdown'
+    )
+
+async def start_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Начинает тест - ИСПРАВЛЕННАЯ ЛОГИКА ДОСТУПНОСТИ"""
+    user_id = update.message.from_user.id
+    text = update.message.text
+    
+    # Получаем информацию о выбранном тесте
+    test_mapping = context.user_data.get('test_mapping', {})
+    test_info = test_mapping.get(text)
+    
+    if not test_info:
+        await update.message.reply_text("❌ Тест не найден")
+        return
+    
+    arc_id = test_info['arc_id']
+    arc_title = test_info['arc_title']
+    week_num = test_info['week_num']
+    completed = test_info['completed']
+    
+    if completed:
+        # Показываем результаты
+        await show_test_results(update, context, user_id, arc_id, week_num)
+        return
+    
+    # ★★ НОВАЯ ПРОВЕРКА: находится ли текущий день в диапазоне дней теста ★★
+    from database import get_current_arc_day
+    current_day_info = get_current_arc_day(user_id, arc_id)
+    current_day = current_day_info['day_number'] if current_day_info else 0
+    
+    # Определяем диапазон дней для этого теста
+    range_start = (week_num - 1) * 7 + 1  # Для недели 1: 1, для недели 2: 8 и т.д.
+    range_end = week_num * 7  # Для недели 1: 7, для недели 2: 14 и т.д.
+    
+    if not (range_start <= current_day <= range_end):
+        await update.message.reply_text(
+            f"⏳ **Тест недели {week_num} доступен только с {range_start} по {range_end} день марафона.**\n\n"
+            f"Ваш текущий день: {current_day}\n\n"
+            f"Этот тест проверяет знания за дни {range_start}-{range_end}.\n"
+            f"Продолжайте выполнять ежедневные задания!",
+            parse_mode='Markdown'
+        )
+        return
+    
+    # Проверяем есть ли вопросы для этого теста
+    from database import get_tests_for_week
+    questions = get_tests_for_week(week_num)
+    
+    if not questions or len(questions) < 15:
+        await update.message.reply_text(
+            f"❌ **Тест недели {week_num} временно недоступен.**\n\n"
+            f"Вопросы для теста еще не загружены.",
+            parse_mode='Markdown'
+        )
+        return
+    
+    # Сохраняем данные теста
+    context.user_data['current_test'] = {
+        'arc_id': arc_id,
+        'arc_title': arc_title,
+        'week_num': week_num,
+        'questions': questions,
+        'current_question': 1,
+        'answers': {},
+        'started_at': datetime.now().isoformat()
+    }
+    
+    # Показываем первый вопрос
+    await show_question(update, context)
+
+async def show_question(update: Update, context: ContextTypes.DEFAULT_TYPE, question_num=None):
+    """Показывает вопрос теста - ФИНАЛЬНАЯ ВЕРСИЯ"""
+    test_data = context.user_data.get('current_test')
+    if not test_data:
+        await update.message.reply_text("❌ Нет активного теста")
+        return
+    
+    if question_num is None:
+        question_num = test_data['current_question']
+    
+    questions = test_data['questions']
+    
+    if question_num > len(questions):
+        # Тест завершен
+        await finish_test(update, context)
+        return
+    
+    # Получаем вопрос
+    question = questions[question_num - 1]
+    test_id, question_text, option1, option2, option3, option4, option5, correct_option, explanation = question
+    
+    # Формируем сообщение БЕЗ вариантов ответа в тексте
+    message = f"📈 **ТЕСТ: Неделя {test_data['week_num']}**\n\n"
+    message += f"📝 **Вопрос {question_num} из 15**\n\n"
+    message += f"{question_text}\n"
+    
+    # ★★ ИСПРАВЛЕНИЕ: Создаем клавиатуру 2 кнопки в ряд
+    keyboard = []
+    option_mapping = {}  # Для сопоставления текста кнопки с optionX
+    
+    # Собираем непустые варианты
+    options = []
+    if option1 and str(option1).strip():
+        options.append((option1, 'option1'))
+    if option2 and str(option2).strip():
+        options.append((option2, 'option2'))
+    if option3 and str(option3).strip():
+        options.append((option3, 'option3'))
+    if option4 and str(option4).strip():
+        options.append((option4, 'option4'))
+    if option5 and str(option5).strip():
+        options.append((option5, 'option5'))
+    
+    # Располагаем по 2 кнопки в ряд
+    current_row = []
+    for i, (option_text, option_key) in enumerate(options, 1):
+        # Обрезаем текст для кнопки
+        display_text = option_text
+        if len(display_text) > 20:
+            display_text = display_text[:17] + "..."
+        
+        current_row.append(display_text)
+        option_mapping[display_text] = option_key
+        
+        # Каждые 2 кнопки или последняя кнопка
+        if i % 2 == 0 or i == len(options):
+            keyboard.append(current_row)
+            current_row = []
+    
+    # Кнопка прерывания отдельной строкой
+    keyboard.append(["⏹️ Прервать тест"])
+    
+    # ★★ ВАЖНО: Сохраняем маппинг для обработки ответа
+    context.user_data['current_question_options'] = option_mapping
+    
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    
+    # Сохраняем текущий вопрос
+    test_data['current_question'] = question_num
+    context.user_data['current_test'] = test_data
+    
+    await update.message.reply_text(
+        message,
+        reply_markup=reply_markup,
+        parse_mode='Markdown'
+    )
+
+async def process_test_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обрабатывает ответ на вопрос теста - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
+    user_id = update.message.from_user.id
+    text = update.message.text
+    
+    # Проверяем активный тест
+    test_data = context.user_data.get('current_test')
+    if not test_data:
+        # Может это выбор теста?
+        if text in ["📈 Пройти тест", "📊 Мои результаты"]:
+            await handle_buttons(update, context)
+            return
+        
+        await update.message.reply_text("❌ Нет активного теста")
+        return
+    
+    # Обработка прерывания теста
+    if text == "⏹️ Прервать тест":
+        # Сохраняем прогресс
+        from database import save_test_progress
+        save_test_progress(
+            user_id=user_id,
+            arc_id=test_data['arc_id'],
+            week_num=test_data['week_num'],
+            current_question=test_data['current_question'],
+            answers=test_data['answers']
+        )
+        
+        context.user_data.pop('current_test', None)
+        context.user_data.pop('current_question_options', None)
+        
+        await update.message.reply_text(
+            "⏸️ **Тест прерван.**\n\n"
+            "Ваш прогресс сохранен.\n"
+            "Можете продолжить позже.",
+            reply_markup=ReplyKeyboardMarkup([["📈 Пройти тест"], ["📊 Мои результаты"]], resize_keyboard=True),
+            parse_mode='Markdown'
+        )
+        return
+    
+    # ★★ ИСПРАВЛЕНИЕ: Получаем выбранный вариант из маппинга
+    option_mapping = context.user_data.get('current_question_options', {})
+    
+    # Пробуем найти точное совпадение
+    selected_option_key = None
+    for option_text, option_value in option_mapping.items():
+        # Сравниваем текст кнопки (возможно обрезанный)
+        if text in option_text or option_text.startswith(text[:30]):
+            selected_option_key = option_value
+            break
+    
+    # Если не нашли точное совпадение, ищем по префиксу (1., 2., и т.д.)
+    if not selected_option_key and text.startswith(('1.', '2.', '3.', '4.', '5.')):
+        prefix = text.split('.')[0]
+        option_map_prefix = {
+            '1': 'option1',
+            '2': 'option2',
+            '3': 'option3',
+            '4': 'option4',
+            '5': 'option5'
+        }
+        selected_option_key = option_map_prefix.get(prefix)
+    
+    if not selected_option_key:
+        await update.message.reply_text("❌ Выберите вариант ответа из предложенных")
+        return
+    
+    # Получаем текущий вопрос
+    question_num = test_data['current_question']
+    questions = test_data['questions']
+    
+    if question_num > len(questions):
+        await finish_test(update, context)
+        return
+    
+    question = questions[question_num - 1]
+    test_id, question_text, option1, option2, option3, option4, option5, correct_option, explanation = question
+    
+    # Проверяем правильность
+    is_correct = (selected_option_key == correct_option)
+    
+    # Получаем текст выбранного варианта
+    option_texts = {
+        'option1': option1,
+        'option2': option2,
+        'option3': option3,
+        'option4': option4,
+        'option5': option5
+    }
+    selected_text = option_texts.get(selected_option_key, 'не указан')
+    
+    # Сохраняем ответ
+    test_data['answers'][str(test_id)] = {
+        'selected': selected_option_key,
+        'selected_text': selected_text,  # ★★ Добавляем текст выбранного варианта
+        'correct': is_correct,
+        'question_text': question_text
+    }
+    
+    # Переходим к следующему вопросу
+    test_data['current_question'] += 1
+    context.user_data['current_test'] = test_data
+    
+    # Очищаем маппинг текущего вопроса
+    context.user_data.pop('current_question_options', None)
+    
+    # Сохраняем промежуточный прогресс
+    from database import save_test_progress
+    save_test_progress(
+        user_id=user_id,
+        arc_id=test_data['arc_id'],
+        week_num=test_data['week_num'],
+        current_question=test_data['current_question'],
+        answers=test_data['answers']
+    )
+    
+    # Показываем следующий вопрос или завершаем
+    if test_data['current_question'] <= len(questions):
+        await show_question(update, context)
+    else:
+        await finish_test(update, context)
+
+async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Завершает тест и показывает результаты"""
+    test_data = context.user_data.get('current_test')
+    if not test_data:
+        await update.message.reply_text("❌ Нет активного теста")
+        return
+    
+    user_id = update.message.from_user.id
+    arc_id = test_data['arc_id']
+    week_num = test_data['week_num']
+    answers = test_data['answers']
+    
+    # Подсчет результатов
+    total_questions = len(test_data['questions'])
+    correct_answers = sum(1 for answer in answers.values() if answer.get('correct', False))
+    score = int((correct_answers / total_questions) * 100) if total_questions > 0 else 0
+    
+    # Сохраняем результат
+    from database import save_test_result
+    result_id = save_test_result(
+        user_id=user_id,
+        arc_id=arc_id,
+        week_num=week_num,
+        answers=answers,
+        score=score
+    )
+    
+    # Очищаем данные теста
+    context.user_data.pop('current_test', None)
+    
+    # Показываем результаты
+    await show_test_results(update, context, user_id, arc_id, week_num)
+
+async def show_test_results(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id=None, arc_id=None, week_num=None):
+    """Показывает результаты теста - НОВАЯ ВЕРСИЯ: сначала выбор марафона"""
+    if user_id is None:
+        user_id = update.message.from_user.id
+    
+    # ★★ ИСПРАВЛЕНИЕ 1: Если переданы arc_id и week_num, показываем конкретный тест
+    if arc_id and week_num:
+        from database import get_test_result, get_tests_for_week
+        result_data = get_test_result(user_id, arc_id, week_num)
+        
+        if not result_data:
+            await update.message.reply_text("❌ Результаты теста не найдены")
+            return
+        
+        # Получаем название марафона
+        conn = sqlite3.connect('mentor_bot.db')
+        cursor = conn.cursor()
+        cursor.execute('SELECT title FROM arcs WHERE arc_id = ?', (arc_id,))
+        arc_title_result = cursor.fetchone()
+        arc_title = arc_title_result[0] if arc_title_result else f"Марафон {arc_id}"
+        conn.close()
+        
+        score = result_data['score']
+        answers = result_data['answers']
+        
+        # Получаем вопросы теста для деталей
+        questions = get_tests_for_week(week_num)
+        question_map = {str(q[0]): q for q in questions}  # test_id -> question data
+        
+        # Формируем сообщение с ошибками
+        await show_test_result_details(update, context, arc_id, arc_title, week_num, score, answers, question_map)
+        return
+    
+    # ★★ ИСПРАВЛЕНИЕ 2: Показываем сначала список марафонов с результатами
+    from database import get_all_test_results
+    results = get_all_test_results(user_id)
+    
+    if not results:
+        await update.message.reply_text(
+            "📭 **Результаты тестов отсутствуют**\n\n"
+            "Вы еще не проходили тесты.",
+            parse_mode='Markdown'
+        )
+        return
+    
+    # Группируем результаты по марафонам
+    arc_results = {}
+    for result_id, res_arc_id, res_week_num, score, completed_at in results:
+        if res_arc_id not in arc_results:
+            arc_results[res_arc_id] = []
+        arc_results[res_arc_id].append({
+            'week_num': res_week_num,
+            'score': score,
+            'completed_at': completed_at,
+            'result_id': result_id
+        })
+    
+    # ★★ НОВОЕ: Сначала показываем выбор марафона
+    keyboard = []
+    arc_mapping = {}
+    
+    for arc_id, tests in arc_results.items():
+        # Получаем название марафона
+        conn = sqlite3.connect('mentor_bot.db')
+        cursor = conn.cursor()
+        cursor.execute('SELECT title FROM arcs WHERE arc_id = ?', (arc_id,))
+        arc_title_result = cursor.fetchone()
+        arc_title = arc_title_result[0] if arc_title_result else f"Марафон {arc_id}"
+        conn.close()
+        
+        # Формируем текст кнопки
+        tests_count = len(tests)
+        btn_text = f"📚 {arc_title} ({tests_count} тест{'ов' if tests_count > 1 else ''})"
+        keyboard.append([btn_text])
+        
+        # Сохраняем маппинг
+        arc_mapping[btn_text] = {
+            'arc_id': arc_id,
+            'arc_title': arc_title,
+            'tests': tests
+        }
+    
+    context.user_data['arc_results_mapping'] = arc_mapping
+    
+    keyboard.append(["🔙 Назад к тестированию"])
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    
+    await update.message.reply_text(
+        "📊 **ВАШИ РЕЗУЛЬТАТЫ ТЕСТОВ**\n\n"
+        "Выберите марафон для просмотра результатов:",
+        reply_markup=reply_markup,
+        parse_mode='Markdown'
+    )
+
+async def show_tests_for_arc_results(update: Update, context: ContextTypes.DEFAULT_TYPE, arc_id=None, arc_title=None):
+    """Показывает тесты выбранного марафона для просмотра результатов"""
+    user_id = update.message.from_user.id
+    
+    # Если переданы arc_id и arc_title, используем их
+    if arc_id and arc_title:
+        pass  # Используем переданные значения
+    else:
+        # Ищем в сохраненных данных
+        arc_data = context.user_data.get('current_arc_for_results', {})
+        if arc_data:
+            arc_id = arc_data.get('arc_id')
+            arc_title = arc_data.get('arc_title')
+        else:
+            # Получаем из mapping
+            text = update.message.text
+            arc_mapping = context.user_data.get('arc_results_mapping', {})
+            arc_info = arc_mapping.get(text)
+            
+            if not arc_info:
+                await update.message.reply_text("❌ Марафон не найден")
+                return
+            
+            arc_id = arc_info['arc_id']
+            arc_title = arc_info['arc_title']
+    
+    # Получаем результаты тестов для этого марафона
+    from database import get_all_test_results
+    all_results = get_all_test_results(user_id, arc_id)
+    
+    if not all_results:
+        await update.message.reply_text(
+            f"📭 **Нет результатов тестов для марафона '{arc_title}'.**",
+            parse_mode='Markdown'
+        )
+        return
+    
+    keyboard = []
+    results_mapping = {}
+    
+    for result_id, res_arc_id, week_num, score, completed_at in all_results:
+        date_str = completed_at[:10] if completed_at else "??"
+        
+        btn_text = f"📊 Неделя {week_num} ({score}%) - {date_str}"
+        keyboard.append([btn_text])
+        
+        results_mapping[btn_text] = {
+            'arc_id': arc_id,
+            'week_num': week_num
+        }
+    
+    context.user_data['test_results_mapping'] = results_mapping
+    
+    keyboard.append(["🔙 Выбрать другой марафон"])
+    keyboard.append(["🔙 Назад к тестированию"])
+    
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    
+    await update.message.reply_text(
+        f"📊 **РЕЗУЛЬТАТЫ МАРАФОНА: {arc_title}**\n\n"
+        f"Выберите тест для просмотра деталей:",
+        reply_markup=reply_markup,
+        parse_mode='Markdown'
+    )
+
+async def show_test_result_details(update: Update, context: ContextTypes.DEFAULT_TYPE, 
+                                   arc_id, arc_title, week_num, score, answers, question_map):
+    """Показывает детали результатов теста - ПОЛНАЯ ИСПРАВЛЕННАЯ ВЕРСИЯ"""
+    total_questions = len(question_map)
+    correct_answers = sum(1 for answer in answers.values() if answer.get('correct', False))
+    
+    # Формируем сообщение с результатами
+    message = f"📈 **РЕЗУЛЬТАТ ТЕСТА: {arc_title} - Неделя {week_num}**\n\n"
+    message += f"📊 **Результат: {score}% ({correct_answers} из {total_questions})**\n\n"
+    
+    # Находим ошибочные ответы
+    wrong_answers = []
+    for test_id_str, answer_data in answers.items():
+        if not answer_data.get('correct', False):
+            wrong_answers.append({
+                'test_id': test_id_str,
+                'selected': answer_data.get('selected'),
+                'question_text': answer_data.get('question_text', '')
+            })
+    
+    if wrong_answers:
+        message += "❌ **Ошибки в вопросах:**\n\n"
+        
+        for i, wrong in enumerate(wrong_answers, 1):
+            test_id = wrong['test_id']
+            question_data = question_map.get(test_id)
+            
+            if question_data:
+                test_id_full, question_text, option1, option2, option3, option4, option5, correct_option, explanation = question_data
+                
+                # Находим текст выбранного варианта
+                selected_option = wrong['selected']
+                option_texts = {
+                    'option1': option1,
+                    'option2': option2,
+                    'option3': option3,
+                    'option4': option4,
+                    'option5': option5
+                }
+                
+                selected_text = answer_data.get('selected_text', 'не указан')
+                correct_text = option_texts.get(correct_option, 'не указан')
+                
+                message += f"{i}. **Вопрос:** {test_id}\n"
+                message += f"   **Текст:** {question_text[:100]}...\n"
+                message += f"   **Ваш ответ:** {selected_text}\n"
+                message += f"   **💡 Верный ответ:** {correct_text}\n"
+                
+                if explanation:
+                    message += f"   **Объяснение:** {explanation[:150]}...\n"
+                
+                message += "\n"
+    
+    else:
+        message += "🎉 **Отличный результат! Все ответы верные!**\n\n"
+    
+    # Кнопки
+    keyboard = [
+        ["📋 Показать все ответы"],
+        ["🔙 Назад к тестам марафона"],
+        ["📈 Пройти другой тест"]
+    ]
+    
+    # Сохраняем данные для показа всех ответов
+    context.user_data['current_test_details'] = {
+        'arc_id': arc_id,
+        'arc_title': arc_title,
+        'week_num': week_num,
+        'score': score,
+        'answers': answers,
+        'question_map': question_map
+    }
+    
+    context.user_data['current_arc_for_results'] = {
+        'arc_id': arc_id,
+        'arc_title': arc_title
+    }
+    
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    
+    # Отправляем сообщение частями если слишком длинное
+    if len(message) > 4000:
+        parts = split_message(message)
+        for i, part in enumerate(parts):
+            if i == len(parts) - 1:
+                await update.message.reply_text(part, reply_markup=reply_markup, parse_mode='Markdown')
+            else:
+                await update.message.reply_text(part, parse_mode='Markdown')
+    else:
+        await update.message.reply_text(message, reply_markup=reply_markup, parse_mode='Markdown')
+
+async def show_all_test_answers(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает все ответы теста (15 вопросов) - ПОЛНАЯ ВЕРСИЯ"""
+    test_details = context.user_data.get('current_test_details')
+    if not test_details:
+        await update.message.reply_text("❌ Нет данных для отображения")
+        return
+    
+    arc_title = test_details['arc_title']
+    week_num = test_details['week_num']
+    score = test_details['score']
+    answers = test_details['answers']
+    question_map = test_details['question_map']
+    
+    total_questions = len(question_map)
+    correct_answers = sum(1 for answer in answers.values() if answer.get('correct', False))
+    
+    # Заголовок
+    message = f"📋 **ВСЕ ОТВЕТЫ ТЕСТА: {arc_title} - Неделя {week_num}**\n\n"
+    message += f"📊 Результат: {score}% ({correct_answers} из {total_questions})\n\n"
+    
+    # Сортируем вопросы по test_id
+    sorted_test_ids = sorted(question_map.keys(), key=lambda x: int(x))
+    
+    question_count = 0
+    
+    for test_id_str in sorted_test_ids:
+        question_count += 1
+        question_data = question_map.get(test_id_str)
+        if not question_data:
+            continue
+        
+        test_id_full, question_text, option1, option2, option3, option4, option5, correct_option, explanation = question_data
+        
+        # Находим ответ пользователя
+        user_answer = answers.get(test_id_str, {})
+        selected_option = user_answer.get('selected')
+        selected_text = user_answer.get('selected_text', 'нет ответа')
+        is_correct = user_answer.get('correct', False)
+        
+        # Тексты всех вариантов
+        option_texts = {
+            'option1': option1,
+            'option2': option2,
+            'option3': option3,
+            'option4': option4,
+            'option5': option5
+        }
+        
+        correct_text = option_texts.get(correct_option, 'не указан')
+        
+        message += f"**{question_count}. {question_text}**\n\n"
+        message += f"**Ваш ответ:** {selected_text} "
+        
+        if is_correct:
+            message += "✅\n"
+        else:
+            message += f"❌\n"
+            message += f"**💡 Верный ответ:** {correct_text}\n"
+            
+            # ★★ ПОЯСНЕНИЕ если есть и ответ неверный
+            if explanation and str(explanation).strip():
+                message += f"   **📝 Пояснение:** {explanation[:150]}...\n"
+        
+        message += "\n" + "─" * 30 + "\n\n"
+    
+    keyboard = [
+        ["🔙 Назад к результату"],
+        ["📈 Пройти другой тест"]
+    ]
+    
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    
+    # Отправляем частями (сообщение будет очень длинное)
+    if len(message) > 4000:
+        parts = split_message(message)
+        for i, part in enumerate(parts):
+            if i == len(parts) - 1:
+                await update.message.reply_text(part, reply_markup=reply_markup, parse_mode='Markdown')
+            else:
+                await update.message.reply_text(part, parse_mode='Markdown')
+    else:
+        await update.message.reply_text(message, reply_markup=reply_markup, parse_mode='Markdown')
+
+async def back_to_test_result(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Возвращает к результату теста из просмотра всех ответов"""
+    if 'current_test_details' not in context.user_data:
+        await update.message.reply_text("❌ Нет данных о тесте")
+        return
+    
+    test_details = context.user_data['current_test_details']
+    user_id = update.message.from_user.id
+    
+    # Получаем результат теста заново
+    from database import get_test_result, get_tests_for_week
+    result_data = get_test_result(user_id, test_details['arc_id'], test_details['week_num'])
+    
+    if not result_data:
+        await update.message.reply_text("❌ Результаты теста не найдены")
+        return
+    
+    score = result_data['score']
+    answers = result_data['answers']
+    
+    # Получаем вопросы теста
+    questions = get_tests_for_week(test_details['week_num'])
+    question_map = {str(q[0]): q for q in questions}
+    
+    # Показываем результат
+    await show_test_result_details(
+        update, context,
+        test_details['arc_id'],
+        test_details['arc_title'],
+        test_details['week_num'],
+        score,
+        answers,
+        question_map
+    )
+
+async def back_to_arc_tests(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Возвращает к тестам марафона из просмотра результата"""
+    if 'current_arc_for_results' in context.user_data:
+        arc_data = context.user_data['current_arc_for_results']
+        await show_tests_for_arc_results(update, context, arc_data['arc_id'], arc_data['arc_title'])
+    elif 'current_test_details' in context.user_data:
+        # Используем данные из текущего теста
+        test_details = context.user_data['current_test_details']
+        await show_tests_for_arc_results(update, context, test_details['arc_id'], test_details['arc_title'])
+    else:
+        await show_test_results(update, context)
+
+
 def main():
     application = Application.builder().token(TOKEN).build()
 
@@ -8370,6 +9791,11 @@ def main():
     upgrade_database()
     from database import test_new_structure
     test_new_structure()
+
+    application.add_handler(MessageHandler(
+        filters.PHOTO | filters.AUDIO | filters.VIDEO | filters.Document.ALL,
+        handle_admin_files
+    ))
     
     application.add_handler(CommandHandler("start", start))
     application.add_error_handler(error_handler)
@@ -8403,6 +9829,16 @@ def main():
     application.add_handler(CommandHandler("lastpay", debug_last_payment))
     application.add_handler(CommandHandler("whstatus", webhook_status))
     application.add_handler(CommandHandler("webhook", manage_webhook))
+    application.add_handler(CommandHandler("loadmedia", load_media_from_excel))
+    application.add_handler(CommandHandler("debugarc", debug_current_arc))
+    application.add_handler(CommandHandler("getfileid", get_file_id))
+    application.add_handler(CommandHandler("cancelfileid", cancel_file_id_mode))
+    application.add_handler(CommandHandler("checkmedia", check_media))
+    application.add_handler(CommandHandler("addphoto", add_photo_to_assignment))
+    application.add_handler(CommandHandler("loadmediasimple", load_media_simple))
+    application.add_handler(CommandHandler("loadallmedia", load_all_media))
+    application.add_handler(CommandHandler("loadtests", load_tests_command))
+    
     
     print("Бот запущен...")
     
